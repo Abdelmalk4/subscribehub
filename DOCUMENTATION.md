@@ -268,6 +268,7 @@ flowchart TB
 |----------|---------|---------|
 | `telegram-bot-handler` | Telegram webhook | Process all bot commands and callbacks |
 | `validate-project-setup` | Frontend RPC | Validate bot token and channel permissions |
+| `setup-telegram-webhook` | Frontend RPC | Auto-configure bot webhook during project creation |
 | `create-checkout-session` | Internal call | Generate Stripe checkout URL |
 | `stripe-webhook` | Stripe webhook | Process successful payments |
 | `check-expiring-subscriptions` | Scheduled/manual | Send reminders and expire subscriptions |
@@ -843,14 +844,14 @@ expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 
 ### 10.1 Missing Features
 
-| Feature | Impact | Priority |
-|---------|--------|----------|
-| **Webhook setup automation** | Users must manually set webhook in BotFather | High |
-| **Revenue tracking** | `revenue: 0` placeholder in project stats | Medium |
-| **Admin notifications** | No Telegram alerts for new payments | Medium |
-| **Multi-language support** | Bot messages only in English | Low |
-| **Grace period** | Users kicked immediately on expiry | Low |
-| **Proration** | No partial refunds or credits | Low |
+| Feature | Impact | Priority | Status |
+|---------|--------|----------|--------|
+| ~~**Webhook setup automation**~~ | ~~Users must manually set webhook in BotFather~~ | ~~High~~ | ✅ Implemented |
+| **Revenue tracking** | `revenue: 0` placeholder in project stats | Medium | Pending |
+| **Admin notifications** | No Telegram alerts for new payments | Medium | Pending |
+| **Multi-language support** | Bot messages only in English | Low | Pending |
+| **Grace period** | Users kicked immediately on expiry | Low | Pending |
+| **Proration** | No partial refunds or credits | Low | Pending |
 
 ### 10.2 Known Issues
 
@@ -887,7 +888,7 @@ expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 |--------|-------|
 | **React Components** | ~50+ |
 | **Database Tables** | 8 |
-| **Edge Functions** | 5 |
+| **Edge Functions** | 6 |
 | **Telegram Commands** | 4 |
 | **Subscriber Statuses** | 6 |
 

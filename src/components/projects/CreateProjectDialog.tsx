@@ -118,7 +118,8 @@ export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreatePro
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("projects").insert({
+      // Create the project first
+      const { data: newProject, error } = await supabase.from("projects").insert({
         user_id: user.id,
         project_name: data.project_name,
         bot_token: data.bot_token,
@@ -129,13 +130,36 @@ export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreatePro
         status: "active",
         stripe_config: { enabled: false },
         manual_payment_config: { enabled: true, instructions: "" },
-      });
+      }).select("id").single();
 
       if (error) throw error;
 
-      toast.success("Project created successfully!", {
-        description: "Your Telegram channel is now set up for subscriptions.",
-      });
+      // Auto-setup webhook for the bot
+      const { data: webhookResult, error: webhookError } = await supabase.functions.invoke(
+        "setup-telegram-webhook",
+        {
+          body: {
+            bot_token: data.bot_token,
+            project_id: newProject.id,
+          },
+        }
+      );
+
+      if (webhookError) {
+        console.error("Webhook setup failed:", webhookError);
+        toast.warning("Project created, but webhook setup failed", {
+          description: "You may need to manually configure the bot webhook.",
+        });
+      } else if (!webhookResult?.success) {
+        console.error("Webhook setup unsuccessful:", webhookResult?.error);
+        toast.warning("Project created, but webhook setup failed", {
+          description: webhookResult?.error || "You may need to manually configure the bot webhook.",
+        });
+      } else {
+        toast.success("Project created successfully!", {
+          description: "Bot webhook configured automatically. Your channel is ready!",
+        });
+      }
 
       form.reset();
       setValidationResult(null);
