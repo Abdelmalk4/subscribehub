@@ -225,7 +225,7 @@ export default function Projects() {
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="glass">
+                    <DropdownMenuContent align="end" className="glass-menu">
                       <DropdownMenuItem>
                         <Users className="h-4 w-4 mr-2" />
                         View Subscribers

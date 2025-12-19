@@ -292,7 +292,7 @@ export default function Analytics() {
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="glass">
+            <SelectContent className="glass-menu">
               <SelectItem value="7d">Last 7 days</SelectItem>
               <SelectItem value="30d">Last 30 days</SelectItem>
               <SelectItem value="90d">Last 90 days</SelectItem>

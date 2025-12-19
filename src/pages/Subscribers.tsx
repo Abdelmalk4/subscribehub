@@ -480,7 +480,7 @@ export default function Subscribers() {
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent className="glass">
+              <SelectContent className="glass-menu">
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending_approval">Pending Approval</SelectItem>
@@ -494,7 +494,7 @@ export default function Subscribers() {
               <SelectTrigger className="w-full md:w-[200px] bg-card/30 border-border/50">
                 <SelectValue placeholder="Project" />
               </SelectTrigger>
-              <SelectContent className="glass">
+              <SelectContent className="glass-menu">
                 <SelectItem value="all">All Projects</SelectItem>
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
@@ -607,7 +607,7 @@ export default function Subscribers() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="glass">
+                            <DropdownMenuContent align="end" className="glass-menu">
                               <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
