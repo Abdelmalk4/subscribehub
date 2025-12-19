@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -24,10 +24,12 @@ import {
   ImageIcon,
   Loader2,
   Link2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { PaymentProofUpload } from "./PaymentProofUpload";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -88,6 +90,13 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const [isExtending, setIsExtending] = useState(false);
   const [extensionDays, setExtensionDays] = useState("30");
   const [showProofDialog, setShowProofDialog] = useState(false);
+  const [showUploadSection, setShowUploadSection] = useState(false);
+  const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
+
+  // Update current proof URL when subscriber changes
+  if (subscriber && subscriber.payment_proof_url !== currentProofUrl) {
+    setCurrentProofUrl(subscriber.payment_proof_url);
+  }
 
   if (!subscriber) return null;
 
@@ -376,6 +385,58 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 </CardContent>
               </Card>
             )}
+
+            {/* Payment Proof Upload Section */}
+            <Card variant="glass">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4" />
+                    Payment Proof
+                  </CardTitle>
+                  {!showUploadSection && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowUploadSection(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-1" />
+                      Upload
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {showUploadSection ? (
+                  <PaymentProofUpload
+                    projectId={subscriber.project_id}
+                    subscriberId={subscriber.id}
+                    currentProofUrl={currentProofUrl}
+                    onUploadComplete={(url) => {
+                      setCurrentProofUrl(url);
+                      setShowUploadSection(false);
+                      onUpdate();
+                    }}
+                  />
+                ) : currentProofUrl ? (
+                  <div className="space-y-2">
+                    <img
+                      src={currentProofUrl}
+                      alt="Payment proof"
+                      className="w-full max-h-48 object-contain rounded-lg bg-muted/30 cursor-pointer"
+                      onClick={() => setShowProofDialog(true)}
+                    />
+                    <p className="text-xs text-muted-foreground text-center">
+                      Click to view full size
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No payment proof uploaded
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
             <Separator />
 
