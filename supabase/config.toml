@@ -2,3 +2,6 @@ project_id = "fcmwixdlmbauyznvcfti"
 
 [functions.validate-project-setup]
 verify_jwt = false
+
+[functions.telegram-bot-handler]
+verify_jwt = false
