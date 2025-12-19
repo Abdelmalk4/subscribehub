@@ -847,7 +847,7 @@ expiryDate.setDate(expiryDate.getDate() + plan.duration_days);
 | Feature | Impact | Priority | Status |
 |---------|--------|----------|--------|
 | ~~**Webhook setup automation**~~ | ~~Users must manually set webhook in BotFather~~ | ~~High~~ | ✅ Implemented |
-| **Revenue tracking** | `revenue: 0` placeholder in project stats | Medium | Pending |
+| ~~**Revenue tracking**~~ | ~~`revenue: 0` placeholder in project stats~~ | ~~Medium~~ | ✅ Implemented |
 | **Admin notifications** | No Telegram alerts for new payments | Medium | Pending |
 | **Multi-language support** | Bot messages only in English | Low | Pending |
 | **Grace period** | Users kicked immediately on expiry | Low | Pending |

@@ -74,12 +74,18 @@ export default function Projects() {
       // Fetch stats for each project
       const stats: ProjectStats = {};
       for (const project of data || []) {
-        // Get subscriber count
-        const { count: subsCount } = await supabase
+        // Get active subscribers with their plan prices for revenue calculation
+        const { data: activeSubscribers, count: subsCount } = await supabase
           .from("subscribers")
-          .select("*", { count: "exact", head: true })
+          .select("plan_id, plans(price)", { count: "exact" })
           .eq("project_id", project.id)
           .eq("status", "active");
+
+        // Calculate total revenue from active subscribers' plan prices
+        const revenue = (activeSubscribers || []).reduce((total, sub) => {
+          const planPrice = (sub.plans as { price: number } | null)?.price || 0;
+          return total + Number(planPrice);
+        }, 0);
 
         // Get plan count
         const { count: plansCount } = await supabase
@@ -90,7 +96,7 @@ export default function Projects() {
 
         stats[project.id] = {
           subscribers: subsCount || 0,
-          revenue: 0, // Would need payment tracking to calculate
+          revenue: revenue,
           plans: plansCount || 0,
         };
       }
@@ -190,7 +196,9 @@ export default function Projects() {
                     <p className="text-xs text-muted-foreground">Subs</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">${stats.revenue}</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      ${stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </p>
                     <p className="text-xs text-muted-foreground">Revenue</p>
                   </div>
                   <div className="text-center">
