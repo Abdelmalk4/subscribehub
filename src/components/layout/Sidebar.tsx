@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -48,8 +49,22 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [isHovered, setIsHovered] = useState(false);
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
+
+  // Keyboard shortcut: Ctrl/Cmd + B to toggle sidebar
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault();
+      onCollapsedChange?.(!collapsed);
+    }
+  }, [collapsed, onCollapsedChange]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -72,12 +87,17 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
     return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
   };
 
+  // Determine if sidebar should show expanded content
+  const showExpanded = !collapsed || isHovered;
+
   return (
     <aside
       className={cn(
         "sticky top-0 z-30 h-screen transition-all duration-300 shrink-0",
-        collapsed ? "w-20" : "w-64"
+        collapsed && !isHovered ? "w-20" : "w-64"
       )}
+      onMouseEnter={() => collapsed && setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="h-full m-3 flex flex-col bg-card backdrop-blur-2xl border border-border/30 rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Logo Section */}
@@ -86,7 +106,7 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm shrink-0">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
-            {!collapsed && (
+            {showExpanded && (
               <div className="flex flex-col">
                 <span className="text-lg font-bold text-foreground">SubscribeHub</span>
                 <span className="text-xs text-muted-foreground">Telegram Monetization</span>
@@ -107,35 +127,44 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
                 to={item.href}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
-                  collapsed && "justify-center px-2",
+                  !showExpanded && "justify-center px-2",
                   isActive
                     ? "bg-primary/10 text-primary border-l-2 border-primary"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
-                title={collapsed ? item.label : undefined}
+                title={!showExpanded ? item.label : undefined}
               >
                 <Icon className={cn(
                   "h-5 w-5 transition-transform duration-200 shrink-0",
                   isActive && "scale-110"
                 )} />
-                {!collapsed && (
-                  <span className="font-medium">{item.label}</span>
+                {showExpanded && (
+                  <span className="font-medium whitespace-nowrap">{item.label}</span>
                 )}
               </Link>
             );
           })}
         </nav>
 
+        {/* Keyboard Shortcut Hint */}
+        {showExpanded && (
+          <div className="px-4 pb-2">
+            <p className="text-xs text-muted-foreground/60 text-center">
+              Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-mono">⌘B</kbd> to toggle
+            </p>
+          </div>
+        )}
+
         {/* User Section */}
         <div className="p-4 border-t border-border/30">
           <div className={cn(
             "flex items-center gap-3 p-3 rounded-xl bg-muted/30",
-            collapsed && "justify-center p-2"
+            !showExpanded && "justify-center p-2"
           )}>
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-secondary/50 flex items-center justify-center shrink-0">
               <span className="text-sm font-semibold text-foreground">{getInitials()}</span>
             </div>
-            {!collapsed && (
+            {showExpanded && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{getDisplayName()}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
@@ -147,13 +176,13 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
             variant="ghost"
             className={cn(
               "w-full mt-2 text-muted-foreground hover:text-destructive",
-              collapsed && "px-0"
+              !showExpanded && "px-0"
             )}
             onClick={handleSignOut}
-            title={collapsed ? "Sign Out" : undefined}
+            title={!showExpanded ? "Sign Out" : undefined}
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">Sign Out</span>}
+            {showExpanded && <span className="ml-2">Sign Out</span>}
           </Button>
         </div>
 
@@ -163,6 +192,7 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
           size="icon"
           onClick={() => onCollapsedChange?.(!collapsed)}
           className="absolute -right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-card border-2 border-border shadow-lg hover:bg-muted z-50"
+          title={collapsed ? "Expand sidebar (⌘B)" : "Collapse sidebar (⌘B)"}
         >
           <ChevronLeft className={cn(
             "h-4 w-4 transition-transform duration-200",
