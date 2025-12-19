@@ -10,6 +10,17 @@ interface SetupWebhookRequest {
   project_id: string;
 }
 
+// Generate a webhook secret from bot token (must match telegram-bot-handler)
+function generateWebhookSecret(botToken: string): string {
+  let hash = 0;
+  for (let i = 0; i < botToken.length; i++) {
+    const char = botToken.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `wh_${Math.abs(hash).toString(36)}`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -30,10 +41,13 @@ serve(async (req) => {
     // Construct the webhook URL for this project
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const webhookUrl = `${supabaseUrl}/functions/v1/telegram-bot-handler?project_id=${project_id}`;
+    
+    // Generate the secret token for webhook authentication
+    const secretToken = generateWebhookSecret(bot_token);
 
     console.log(`Setting up webhook for project ${project_id} to URL: ${webhookUrl}`);
 
-    // Call Telegram API to set the webhook
+    // Call Telegram API to set the webhook with secret_token for authentication
     const telegramResponse = await fetch(
       `https://api.telegram.org/bot${bot_token}/setWebhook`,
       {
@@ -43,6 +57,7 @@ serve(async (req) => {
           url: webhookUrl,
           allowed_updates: ["message", "callback_query"],
           drop_pending_updates: true,
+          secret_token: secretToken, // This will be sent as X-Telegram-Bot-Api-Secret-Token header
         }),
       }
     );
@@ -71,7 +86,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Webhook configured successfully",
+        message: "Webhook configured successfully with authentication",
         webhook_url: webhookUrl,
         webhook_info: webhookInfo.result,
       }),
@@ -79,9 +94,9 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error setting up webhook:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    // Return generic error to avoid information leakage
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
+      JSON.stringify({ success: false, error: "Failed to configure webhook" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

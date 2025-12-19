@@ -3,11 +3,69 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-telegram-bot-api-secret-token",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Validate UUID format
+function isValidUUID(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
+// Sanitize string for HTML display to prevent injection
+function sanitizeForHTML(text: string | undefined | null): string {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Sanitize and limit username/name length
+function sanitizeUserInput(text: string | undefined | null, maxLength: number = 100): string {
+  if (!text) return "";
+  // Remove control characters and limit length
+  return text.replace(/[\x00-\x1F\x7F]/g, "").substring(0, maxLength);
+}
+
+// Verify webhook request authenticity using secret token
+function verifyWebhookAuth(req: Request, botToken: string): boolean {
+  // Get the secret token from header (set when configuring webhook)
+  const providedToken = req.headers.get("x-telegram-bot-api-secret-token");
+  
+  // If no token provided in header, check if we're using IP-based verification
+  // For now, we use the bot token hash as the expected secret
+  // The webhook should be set up with this secret_token parameter
+  if (!providedToken) {
+    console.warn("No X-Telegram-Bot-Api-Secret-Token header provided");
+    return false;
+  }
+  
+  // The secret token should match what was set in setWebhook
+  // We use a hash of the bot token as the secret for verification
+  const expectedToken = generateWebhookSecret(botToken);
+  return providedToken === expectedToken;
+}
+
+// Generate a webhook secret from bot token (deterministic)
+function generateWebhookSecret(botToken: string): string {
+  // Simple hash-like secret generation from bot token
+  // This creates a consistent secret that can be used when setting up the webhook
+  let hash = 0;
+  for (let i = 0; i < botToken.length; i++) {
+    const char = botToken.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return `wh_${Math.abs(hash).toString(36)}`;
+}
 
 interface TelegramUpdate {
   update_id: number;
@@ -97,9 +155,18 @@ serve(async (req) => {
     const url = new URL(req.url);
     const projectId = url.searchParams.get("project_id");
 
+    // Validate project_id format
     if (!projectId) {
       console.error("Missing project_id parameter");
       return new Response(JSON.stringify({ error: "Missing project_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!isValidUUID(projectId)) {
+      console.error("Invalid project_id format");
+      return new Response(JSON.stringify({ error: "Invalid project_id format" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -122,6 +189,16 @@ serve(async (req) => {
 
     const typedProject = project as Project;
     const botToken = typedProject.bot_token;
+
+    // Verify webhook authenticity
+    if (!verifyWebhookAuth(req, botToken)) {
+      console.error("Webhook authentication failed - invalid or missing secret token");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const update: TelegramUpdate = await req.json();
     console.log("Received update:", JSON.stringify(update));
 
@@ -131,16 +208,54 @@ serve(async (req) => {
       const callbackData = callback_query.data;
       const userId = callback_query.from.id;
       const chatId = callback_query.message.chat.id;
-      const firstName = callback_query.from.first_name;
-      const username = callback_query.from.username;
+      const firstName = sanitizeUserInput(callback_query.from.first_name, 100);
+      const username = sanitizeUserInput(callback_query.from.username, 50);
 
       await answerCallbackQuery(botToken, callback_query.id);
 
       if (callbackData.startsWith("select_plan:")) {
         const planId = callbackData.split(":")[1];
+        
+        // Validate planId is a valid UUID
+        if (!isValidUUID(planId)) {
+          console.error("Invalid plan ID format in callback:", planId);
+          await sendTelegramMessage(botToken, chatId, "❌ Invalid plan selection. Please try /start again.");
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
         await handlePlanSelection(supabase, typedProject, planId, userId, chatId, firstName, username);
       } else if (callbackData.startsWith("pay_method:")) {
-        const [, planId, method] = callbackData.split(":");
+        const parts = callbackData.split(":");
+        if (parts.length !== 3) {
+          console.error("Invalid pay_method callback format");
+          await sendTelegramMessage(botToken, chatId, "❌ Invalid selection. Please try /start again.");
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const [, planId, method] = parts;
+        
+        // Validate planId is a valid UUID
+        if (!isValidUUID(planId)) {
+          console.error("Invalid plan ID format in payment method:", planId);
+          await sendTelegramMessage(botToken, chatId, "❌ Invalid plan selection. Please try /start again.");
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Validate payment method
+        if (!["manual", "stripe"].includes(method)) {
+          console.error("Invalid payment method:", method);
+          await sendTelegramMessage(botToken, chatId, "❌ Invalid payment method. Please try again.");
+          return new Response(JSON.stringify({ ok: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
         await handlePaymentMethod(supabase, typedProject, planId, method, userId, chatId);
       } else if (callbackData === "confirm_payment") {
         await sendTelegramMessage(botToken, chatId, "✅ Your payment confirmation has been received!\n\nPlease wait while we verify your payment.");
@@ -157,8 +272,8 @@ serve(async (req) => {
       const text = message.text!;
       const userId = message.from.id;
       const chatId = message.chat.id;
-      const firstName = message.from.first_name;
-      const username = message.from.username;
+      const firstName = sanitizeUserInput(message.from.first_name, 100);
+      const username = sanitizeUserInput(message.from.username, 50);
       const command = text.split(" ")[0].toLowerCase();
 
       switch (command) {
@@ -214,8 +329,8 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Error processing webhook:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    // Return generic error to avoid information leakage
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -239,13 +354,14 @@ async function handleStart(
     .single();
 
   const sub = existingSubscriber as Subscriber | null;
+  const safeFirstName = sanitizeForHTML(firstName);
 
   if (sub && sub.status === "active") {
     const expiryDate = sub.expiry_date ? new Date(sub.expiry_date).toLocaleDateString() : "N/A";
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      `👋 Welcome back, <b>${firstName}</b>!\n\n✅ You have an active subscription!\n📅 Expires: ${expiryDate}\n\nUse /status to check details.\nUse /renew to extend.`
+      `👋 Welcome back, <b>${safeFirstName}</b>!\n\n✅ You have an active subscription!\n📅 Expires: ${expiryDate}\n\nUse /status to check details.\nUse /renew to extend.`
     );
     return;
   }
@@ -258,12 +374,13 @@ async function handleStart(
     .order("price", { ascending: true });
 
   const typedPlans = (plans || []) as Plan[];
+  const safeProjectName = sanitizeForHTML(project.project_name);
 
   if (typedPlans.length === 0) {
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      `👋 Welcome to <b>${project.project_name}</b>!\n\nSorry, no subscription plans available. Please check back later.`
+      `👋 Welcome to <b>${safeProjectName}</b>!\n\nSorry, no subscription plans available. Please check back later.`
     );
     return;
   }
@@ -276,8 +393,8 @@ async function handleStart(
   await sendTelegramMessage(
     project.bot_token,
     chatId,
-    `👋 Welcome to <b>${project.project_name}</b>, ${firstName}!\n\n🎯 Choose a subscription plan:\n\n` +
-      typedPlans.map((p) => `• <b>${p.plan_name}</b>\n  💰 $${p.price} for ${p.duration_days} days\n  ${p.description || ""}`).join("\n\n"),
+    `👋 Welcome to <b>${safeProjectName}</b>, ${safeFirstName}!\n\n🎯 Choose a subscription plan:\n\n` +
+      typedPlans.map((p) => `• <b>${sanitizeForHTML(p.plan_name)}</b>\n  💰 $${p.price} for ${p.duration_days} days\n  ${sanitizeForHTML(p.description)}`).join("\n\n"),
     { inline_keyboard: keyboard }
   );
 
@@ -318,7 +435,7 @@ async function handleStatus(supabase: any, project: Project, userId: number, cha
   const status = statusText[sub.status] || sub.status;
 
   let message = `📊 <b>Subscription Status</b>\n\n${emoji} Status: <b>${status}</b>\n`;
-  if (sub.plans) message += `📦 Plan: ${sub.plans.plan_name}\n`;
+  if (sub.plans) message += `📦 Plan: ${sanitizeForHTML(sub.plans.plan_name)}\n`;
   if (sub.start_date) message += `📅 Started: ${new Date(sub.start_date).toLocaleDateString()}\n`;
   if (sub.expiry_date) {
     const expiry = new Date(sub.expiry_date);
@@ -373,7 +490,7 @@ async function handleRenew(supabase: any, project: Project, userId: number, chat
 }
 
 async function handleHelp(project: Project, chatId: number) {
-  const supportInfo = project.support_contact ? `\n\n📞 Support: ${project.support_contact}` : "";
+  const supportInfo = project.support_contact ? `\n\n📞 Support: ${sanitizeForHTML(project.support_contact)}` : "";
   await sendTelegramMessage(
     project.bot_token,
     chatId,
@@ -419,7 +536,7 @@ async function handlePlanSelection(
   await sendTelegramMessage(
     project.bot_token,
     chatId,
-    `✅ Great choice!\n\n📦 <b>${typedPlan.plan_name}</b>\n💰 Price: $${typedPlan.price}\n⏱ Duration: ${typedPlan.duration_days} days\n\nSelect your payment method:`,
+    `✅ Great choice!\n\n📦 <b>${sanitizeForHTML(typedPlan.plan_name)}</b>\n💰 Price: $${typedPlan.price}\n⏱ Duration: ${typedPlan.duration_days} days\n\nSelect your payment method:`,
     { inline_keyboard: paymentButtons }
   );
 }
@@ -448,7 +565,7 @@ async function handlePaymentMethod(
       .eq("project_id", project.id)
       .eq("telegram_user_id", userId);
 
-    const instructions = project.manual_payment_config?.instructions || "Please send your payment to complete the subscription.";
+    const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || "Please send your payment to complete the subscription.";
 
     await sendTelegramMessage(
       project.bot_token,
@@ -523,3 +640,6 @@ async function handlePaymentMethod(
     }
   }
 }
+
+// Export helper for webhook setup - this secret should be used when calling setWebhook
+export { generateWebhookSecret };
