@@ -111,6 +111,10 @@
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .glass-menu {
+    @apply bg-card backdrop-blur-xl border border-border/50 z-50;
+  }
+
   .glass-card:hover {
     @apply bg-card/80 border-border/60;
     box-shadow: var(--glow-cyan);
