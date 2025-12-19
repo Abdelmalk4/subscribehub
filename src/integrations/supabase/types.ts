@@ -261,6 +261,45 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_inquiries: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string
+          id: string
+          message: string | null
+          name: string
+          plan_interest: string | null
+          responded_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          message?: string | null
+          name: string
+          plan_interest?: string | null
+          responded_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string | null
+          name?: string
+          plan_interest?: string | null
+          responded_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       subscribers: {
         Row: {
           approved_by_admin_id: string | null

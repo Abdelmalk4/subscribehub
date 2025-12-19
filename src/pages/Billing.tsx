@@ -12,6 +12,7 @@ import {
   Loader2,
   XCircle,
   RefreshCw,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ContactSalesDialog } from "@/components/billing/ContactSalesDialog";
 
 interface SubscriptionPlan {
   id: string;
@@ -68,6 +70,7 @@ export default function Billing() {
   // Dialog states
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [changePlanDialogOpen, setChangePlanDialogOpen] = useState(false);
+  const [contactSalesOpen, setContactSalesOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
 
   useEffect(() => {
@@ -429,6 +432,7 @@ export default function Billing() {
           {plans.map((plan) => {
             const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
             const isPopular = plan.plan_slug === "pro";
+            const isUnlimited = plan.plan_slug === "unlimited";
             const isUpgrade = subscription?.plan ? plan.price > subscription.plan.price : true;
             
             return (
@@ -445,8 +449,14 @@ export default function Billing() {
                 <CardHeader className="text-center pb-2">
                   <CardTitle className="text-lg">{plan.plan_name}</CardTitle>
                   <div className="mt-2">
-                    <span className="text-4xl font-bold text-foreground">${plan.price}</span>
-                    <span className="text-muted-foreground">/mo</span>
+                    {isUnlimited ? (
+                      <span className="text-4xl font-bold text-foreground">Contact Us</span>
+                    ) : (
+                      <>
+                        <span className="text-4xl font-bold text-foreground">${plan.price}</span>
+                        <span className="text-muted-foreground">/mo</span>
+                      </>
+                    )}
                   </div>
                   <CardDescription>
                     {plan.max_projects < 0 ? "Unlimited" : plan.max_projects} projects, {" "}
@@ -462,15 +472,26 @@ export default function Billing() {
                       </li>
                     ))}
                   </ul>
-                  <Button
-                    variant={isCurrentPlan ? "outline" : isPopular ? "gradient" : "glass"}
-                    className="w-full"
-                    disabled={isCurrentPlan || actionLoading}
-                    onClick={() => !isCurrentPlan && openChangePlanDialog(plan)}
-                  >
-                    {isCurrentPlan ? "Current Plan" : isUpgrade ? "Upgrade" : "Downgrade"}
-                    {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
-                  </Button>
+                  {isUnlimited ? (
+                    <Button
+                      variant="glass"
+                      className="w-full"
+                      onClick={() => setContactSalesOpen(true)}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Talk to Sales
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={isCurrentPlan ? "outline" : isPopular ? "gradient" : "glass"}
+                      className="w-full"
+                      disabled={isCurrentPlan || actionLoading}
+                      onClick={() => !isCurrentPlan && openChangePlanDialog(plan)}
+                    >
+                      {isCurrentPlan ? "Current Plan" : isUpgrade ? "Upgrade" : "Downgrade"}
+                      {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -574,6 +595,9 @@ export default function Billing() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Contact Sales Dialog */}
+      <ContactSalesDialog open={contactSalesOpen} onOpenChange={setContactSalesOpen} />
     </div>
   );
 }
