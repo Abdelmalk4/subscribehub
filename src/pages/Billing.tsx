@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ContactSalesDialog } from "@/components/billing/ContactSalesDialog";
+import { SubscriptionPaymentDialog } from "@/components/billing/SubscriptionPaymentDialog";
 
 interface SubscriptionPlan {
   id: string;
@@ -71,6 +72,7 @@ export default function Billing() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [changePlanDialogOpen, setChangePlanDialogOpen] = useState(false);
   const [contactSalesOpen, setContactSalesOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
 
   useEffect(() => {
@@ -281,7 +283,7 @@ export default function Billing() {
 
   const openChangePlanDialog = (plan: SubscriptionPlan) => {
     setSelectedPlan(plan);
-    setChangePlanDialogOpen(true);
+    setPaymentDialogOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -598,6 +600,15 @@ export default function Billing() {
 
       {/* Contact Sales Dialog */}
       <ContactSalesDialog open={contactSalesOpen} onOpenChange={setContactSalesOpen} />
+
+      {/* Subscription Payment Dialog */}
+      <SubscriptionPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        selectedPlan={selectedPlan}
+        subscriptionId={subscription?.id || null}
+        onPaymentSubmitted={fetchBillingData}
+      />
     </div>
   );
 }
