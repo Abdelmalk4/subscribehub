@@ -79,11 +79,11 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
         collapsed ? "w-20" : "w-64"
       )}
     >
-      <div className="h-full m-3 flex flex-col bg-card/40 backdrop-blur-2xl border border-border/30 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="h-full m-3 flex flex-col bg-card backdrop-blur-2xl border border-border/30 rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Logo Section */}
         <div className="p-4 border-b border-border/30">
           <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm shrink-0">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
             {!collapsed && (
@@ -107,13 +107,15 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
                 to={item.href}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                  collapsed && "justify-center px-2",
                   isActive
                     ? "bg-primary/10 text-primary border-l-2 border-primary"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon className={cn(
-                  "h-5 w-5 transition-transform duration-200",
+                  "h-5 w-5 transition-transform duration-200 shrink-0",
                   isActive && "scale-110"
                 )} />
                 {!collapsed && (
@@ -128,9 +130,9 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
         <div className="p-4 border-t border-border/30">
           <div className={cn(
             "flex items-center gap-3 p-3 rounded-xl bg-muted/30",
-            collapsed && "justify-center"
+            collapsed && "justify-center p-2"
           )}>
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-secondary/50 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-secondary/50 flex items-center justify-center shrink-0">
               <span className="text-sm font-semibold text-foreground">{getInitials()}</span>
             </div>
             {!collapsed && (
@@ -148,21 +150,22 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
               collapsed && "px-0"
             )}
             onClick={handleSignOut}
+            title={collapsed ? "Sign Out" : undefined}
           >
             <LogOut className="h-4 w-4" />
             {!collapsed && <span className="ml-2">Sign Out</span>}
           </Button>
         </div>
 
-        {/* Collapse Toggle */}
+        {/* Collapse Toggle - Always visible */}
         <Button
-          variant="ghost"
-          size="icon-sm"
+          variant="outline"
+          size="icon"
           onClick={() => onCollapsedChange?.(!collapsed)}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-card border border-border shadow-md"
+          className="absolute -right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-card border-2 border-border shadow-lg hover:bg-muted z-50"
         >
           <ChevronLeft className={cn(
-            "h-3 w-3 transition-transform duration-200",
+            "h-4 w-4 transition-transform duration-200",
             collapsed && "rotate-180"
           )} />
         </Button>
