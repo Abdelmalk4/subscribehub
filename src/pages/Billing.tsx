@@ -10,10 +10,23 @@ import {
   CreditCard,
   Receipt,
   Loader2,
+  XCircle,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface SubscriptionPlan {
   id: string;
@@ -45,11 +58,17 @@ interface PaymentRecord {
 export default function Billing() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [projectCount, setProjectCount] = useState(0);
   const [subscriberCount, setSubscriberCount] = useState(0);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  
+  // Dialog states
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [changePlanDialogOpen, setChangePlanDialogOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -168,6 +187,100 @@ export default function Billing() {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    if (!subscription) return;
+    
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("client_subscriptions")
+        .update({ 
+          status: "expired",
+          current_period_end: new Date().toISOString()
+        })
+        .eq("id", subscription.id);
+
+      if (error) throw error;
+      
+      toast.success("Subscription cancelled successfully");
+      setCancelDialogOpen(false);
+      fetchBillingData();
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      toast.error("Failed to cancel subscription");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReactivateSubscription = async () => {
+    if (!subscription) return;
+    
+    setActionLoading(true);
+    try {
+      const newPeriodEnd = new Date();
+      newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
+      
+      const { error } = await supabase
+        .from("client_subscriptions")
+        .update({ 
+          status: subscription.plan ? "active" : "trial",
+          current_period_start: new Date().toISOString(),
+          current_period_end: newPeriodEnd.toISOString(),
+          trial_ends_at: subscription.plan ? null : newPeriodEnd.toISOString()
+        })
+        .eq("id", subscription.id);
+
+      if (error) throw error;
+      
+      toast.success("Subscription reactivated successfully");
+      fetchBillingData();
+    } catch (error) {
+      console.error("Error reactivating subscription:", error);
+      toast.error("Failed to reactivate subscription");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleChangePlan = async () => {
+    if (!subscription || !selectedPlan) return;
+    
+    setActionLoading(true);
+    try {
+      const newPeriodEnd = new Date();
+      newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
+      
+      const { error } = await supabase
+        .from("client_subscriptions")
+        .update({ 
+          plan_id: selectedPlan.id,
+          status: "active",
+          current_period_start: new Date().toISOString(),
+          current_period_end: newPeriodEnd.toISOString(),
+          trial_ends_at: null
+        })
+        .eq("id", subscription.id);
+
+      if (error) throw error;
+      
+      toast.success(`Successfully switched to ${selectedPlan.plan_name} plan`);
+      setChangePlanDialogOpen(false);
+      setSelectedPlan(null);
+      fetchBillingData();
+    } catch (error) {
+      console.error("Error changing plan:", error);
+      toast.error("Failed to change plan");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openChangePlanDialog = (plan: SubscriptionPlan) => {
+    setSelectedPlan(plan);
+    setChangePlanDialogOpen(true);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
@@ -196,6 +309,7 @@ export default function Billing() {
   const getProjectLimit = () => subscription?.plan?.max_projects || 1;
   const getSubscriberLimit = () => subscription?.plan?.max_subscribers || 20;
   const getCurrentPlanSlug = () => subscription?.plan?.plan_slug || "";
+  const isExpired = subscription?.status === "expired";
 
   if (loading) {
     return (
@@ -237,48 +351,74 @@ export default function Billing() {
               </p>
               <p className="text-muted-foreground">
                 {subscription?.plan 
-                  ? `$${subscription.plan.price}/month • Renews ${getRenewalDate()}`
-                  : `Trial ends ${getRenewalDate()}`
+                  ? `$${subscription.plan.price}/month • ${isExpired ? "Expired" : `Renews ${getRenewalDate()}`}`
+                  : `Trial ${isExpired ? "expired" : `ends ${getRenewalDate()}`}`
                 }
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="glass">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Update Payment
-              </Button>
-              {subscription?.plan && (
-                <Button variant="outline">Cancel Plan</Button>
+              {isExpired ? (
+                <Button 
+                  variant="gradient" 
+                  onClick={handleReactivateSubscription}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Reactivate
+                </Button>
+              ) : (
+                <>
+                  <Button variant="glass">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Update Payment
+                  </Button>
+                  {(subscription?.plan || subscription?.status === "trial") && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setCancelDialogOpen(true)}
+                      disabled={actionLoading}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Projects</span>
-                <span className="font-medium text-foreground">
-                  {projectCount} / {getProjectLimit() === 999999 ? "∞" : getProjectLimit()}
-                </span>
+          {!isExpired && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Projects</span>
+                  <span className="font-medium text-foreground">
+                    {projectCount} / {getProjectLimit() === 999999 ? "∞" : getProjectLimit()}
+                  </span>
+                </div>
+                <Progress 
+                  value={getProjectLimit() === 999999 ? 0 : (projectCount / getProjectLimit()) * 100} 
+                  className="h-2" 
+                />
               </div>
-              <Progress 
-                value={getProjectLimit() === 999999 ? 0 : (projectCount / getProjectLimit()) * 100} 
-                className="h-2" 
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subscribers</span>
-                <span className="font-medium text-foreground">
-                  {subscriberCount} / {getSubscriberLimit() === 999999 ? "∞" : getSubscriberLimit().toLocaleString()}
-                </span>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subscribers</span>
+                  <span className="font-medium text-foreground">
+                    {subscriberCount} / {getSubscriberLimit() === 999999 ? "∞" : getSubscriberLimit().toLocaleString()}
+                  </span>
+                </div>
+                <Progress 
+                  value={getSubscriberLimit() === 999999 ? 0 : (subscriberCount / getSubscriberLimit()) * 100} 
+                  className="h-2" 
+                />
               </div>
-              <Progress 
-                value={getSubscriberLimit() === 999999 ? 0 : (subscriberCount / getSubscriberLimit()) * 100} 
-                className="h-2" 
-              />
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -289,6 +429,7 @@ export default function Billing() {
           {plans.map((plan) => {
             const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
             const isPopular = plan.plan_slug === "pro";
+            const isUpgrade = subscription?.plan ? plan.price > subscription.plan.price : true;
             
             return (
               <Card
@@ -324,9 +465,10 @@ export default function Billing() {
                   <Button
                     variant={isCurrentPlan ? "outline" : isPopular ? "gradient" : "glass"}
                     className="w-full"
-                    disabled={isCurrentPlan}
+                    disabled={isCurrentPlan || actionLoading}
+                    onClick={() => !isCurrentPlan && openChangePlanDialog(plan)}
                   >
-                    {isCurrentPlan ? "Current Plan" : "Upgrade"}
+                    {isCurrentPlan ? "Current Plan" : isUpgrade ? "Upgrade" : "Downgrade"}
                     {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
                   </Button>
                 </CardContent>
@@ -374,6 +516,64 @@ export default function Billing() {
           )}
         </CardContent>
       </Card>
+
+      {/* Cancel Subscription Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Subscription</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel your subscription? You'll lose access to premium features immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Keep Subscription</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelSubscription}
+              disabled={actionLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {actionLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              Cancel Subscription
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Change Plan Dialog */}
+      <AlertDialog open={changePlanDialogOpen} onOpenChange={setChangePlanDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedPlan && subscription?.plan && selectedPlan.price > subscription.plan.price
+                ? "Upgrade Plan"
+                : "Change Plan"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedPlan && (
+                <>
+                  You're about to switch to the <strong>{selectedPlan.plan_name}</strong> plan at{" "}
+                  <strong>${selectedPlan.price}/month</strong>. This change will take effect immediately.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleChangePlan}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              Confirm Change
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
