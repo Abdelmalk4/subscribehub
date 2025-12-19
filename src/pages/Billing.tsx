@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -5,77 +6,205 @@ import { Progress } from "@/components/ui/progress";
 import {
   Crown,
   Check,
-  Zap,
-  Rocket,
-  Shield,
   ArrowRight,
   CreditCard,
   Receipt,
+  Loader2,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
-const plans = [
-  {
-    name: "Starter",
-    price: 19,
-    description: "Perfect for getting started",
-    features: [
-      "2 Projects",
-      "100 Subscribers",
-      "Basic Analytics",
-      "Email Support",
-    ],
-    popular: false,
-  },
-  {
-    name: "Pro",
-    price: 49,
-    description: "For growing channels",
-    features: [
-      "5 Projects",
-      "500 Subscribers",
-      "Advanced Analytics",
-      "Priority Support",
-      "Custom Bot Messages",
-    ],
-    popular: true,
-  },
-  {
-    name: "Premium",
-    price: 99,
-    description: "For serious creators",
-    features: [
-      "15 Projects",
-      "2,000 Subscribers",
-      "Full Analytics Suite",
-      "24/7 Support",
-      "API Access",
-      "White-label Options",
-    ],
-    popular: false,
-  },
-  {
-    name: "Unlimited",
-    price: 199,
-    description: "Enterprise scale",
-    features: [
-      "Unlimited Projects",
-      "Unlimited Subscribers",
-      "Custom Integrations",
-      "Dedicated Account Manager",
-      "SLA Guarantee",
-      "Custom Development",
-    ],
-    popular: false,
-  },
-];
+interface SubscriptionPlan {
+  id: string;
+  plan_name: string;
+  plan_slug: string;
+  price: number;
+  max_projects: number;
+  max_subscribers: number;
+  features: string[];
+  billing_cycle: string;
+}
 
-const paymentHistory = [
-  { id: 1, date: "Dec 1, 2024", amount: "$49.00", status: "paid", plan: "Pro" },
-  { id: 2, date: "Nov 1, 2024", amount: "$49.00", status: "paid", plan: "Pro" },
-  { id: 3, date: "Oct 1, 2024", amount: "$19.00", status: "paid", plan: "Starter" },
-];
+interface UserSubscription {
+  id: string;
+  status: string;
+  current_period_end: string | null;
+  trial_ends_at: string | null;
+  plan: SubscriptionPlan | null;
+}
+
+interface PaymentRecord {
+  id: string;
+  created_at: string;
+  amount: number;
+  status: string;
+  plan_name: string;
+}
 
 export default function Billing() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [projectCount, setProjectCount] = useState(0);
+  const [subscriberCount, setSubscriberCount] = useState(0);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchBillingData();
+    }
+  }, [user]);
+
+  const fetchBillingData = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      // Fetch user's subscription with plan details
+      const { data: subData } = await supabase
+        .from("client_subscriptions")
+        .select(`
+          id,
+          status,
+          current_period_end,
+          trial_ends_at,
+          plan_id,
+          subscription_plans (
+            id,
+            plan_name,
+            plan_slug,
+            price,
+            max_projects,
+            max_subscribers,
+            features,
+            billing_cycle
+          )
+        `)
+        .eq("client_id", user.id)
+        .single();
+
+      if (subData) {
+        const planData = subData.subscription_plans as unknown as SubscriptionPlan | null;
+        setSubscription({
+          id: subData.id,
+          status: subData.status || "trial",
+          current_period_end: subData.current_period_end,
+          trial_ends_at: subData.trial_ends_at,
+          plan: planData ? {
+            ...planData,
+            features: Array.isArray(planData.features) ? planData.features : []
+          } : null,
+        });
+      }
+
+      // Fetch all available plans
+      const { data: plansData } = await supabase
+        .from("subscription_plans")
+        .select("*")
+        .eq("is_active", true)
+        .order("price", { ascending: true });
+
+      if (plansData) {
+        setPlans(plansData.map(p => ({
+          ...p,
+          billing_cycle: p.billing_cycle || "monthly",
+          features: Array.isArray(p.features) ? (p.features as string[]) : []
+        })));
+      }
+
+      // Count user's projects
+      const { count: projCount } = await supabase
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      setProjectCount(projCount || 0);
+
+      // Count total subscribers across all user's projects
+      const { data: userProjects } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("user_id", user.id);
+
+      if (userProjects && userProjects.length > 0) {
+        const projectIds = userProjects.map(p => p.id);
+        const { count: subCount } = await supabase
+          .from("subscribers")
+          .select("*", { count: "exact", head: true })
+          .in("project_id", projectIds);
+
+        setSubscriberCount(subCount || 0);
+      }
+
+      // Fetch payment history
+      const { data: paymentData } = await supabase
+        .from("client_subscription_payments")
+        .select(`
+          id,
+          created_at,
+          amount,
+          status,
+          subscription_plans (plan_name)
+        `)
+        .eq("client_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (paymentData) {
+        setPayments(paymentData.map(p => ({
+          id: p.id,
+          created_at: p.created_at || "",
+          amount: p.amount,
+          status: p.status || "pending",
+          plan_name: (p.subscription_plans as unknown as { plan_name: string })?.plan_name || "Unknown",
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching billing data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return <Badge variant="success">Active</Badge>;
+      case "trial":
+        return <Badge variant="info">Trial</Badge>;
+      case "pending_payment":
+        return <Badge variant="warning">Pending Payment</Badge>;
+      case "expired":
+        return <Badge variant="destructive">Expired</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const getRenewalDate = () => {
+    if (subscription?.current_period_end) {
+      return format(new Date(subscription.current_period_end), "MMM d, yyyy");
+    }
+    if (subscription?.trial_ends_at) {
+      return format(new Date(subscription.trial_ends_at), "MMM d, yyyy");
+    }
+    return "N/A";
+  };
+
+  const getProjectLimit = () => subscription?.plan?.max_projects || 1;
+  const getSubscriberLimit = () => subscription?.plan?.max_subscribers || 20;
+  const getCurrentPlanSlug = () => subscription?.plan?.plan_slug || "";
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -97,41 +226,57 @@ export default function Billing() {
               </CardTitle>
               <CardDescription>Your subscription details</CardDescription>
             </div>
-            <Badge variant="success" className="text-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-success mr-1.5 animate-pulse" />
-              Active
-            </Badge>
+            {getStatusBadge(subscription?.status || "trial")}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <p className="text-3xl font-bold text-foreground">Pro Plan</p>
-              <p className="text-muted-foreground">$49/month • Renews Jan 1, 2025</p>
+              <p className="text-3xl font-bold text-foreground">
+                {subscription?.plan?.plan_name || "Free Trial"}
+              </p>
+              <p className="text-muted-foreground">
+                {subscription?.plan 
+                  ? `$${subscription.plan.price}/month • Renews ${getRenewalDate()}`
+                  : `Trial ends ${getRenewalDate()}`
+                }
+              </p>
             </div>
             <div className="flex gap-2">
               <Button variant="glass">
                 <CreditCard className="h-4 w-4 mr-2" />
                 Update Payment
               </Button>
-              <Button variant="outline">Cancel Plan</Button>
+              {subscription?.plan && (
+                <Button variant="outline">Cancel Plan</Button>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Projects</span>
-                <span className="font-medium text-foreground">3 / 5</span>
+                <span className="font-medium text-foreground">
+                  {projectCount} / {getProjectLimit() === 999999 ? "∞" : getProjectLimit()}
+                </span>
               </div>
-              <Progress value={60} className="h-2" />
+              <Progress 
+                value={getProjectLimit() === 999999 ? 0 : (projectCount / getProjectLimit()) * 100} 
+                className="h-2" 
+              />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Subscribers</span>
-                <span className="font-medium text-foreground">156 / 500</span>
+                <span className="font-medium text-foreground">
+                  {subscriberCount} / {getSubscriberLimit() === 999999 ? "∞" : getSubscriberLimit().toLocaleString()}
+                </span>
               </div>
-              <Progress value={31} className="h-2" />
+              <Progress 
+                value={getSubscriberLimit() === 999999 ? 0 : (subscriberCount / getSubscriberLimit()) * 100} 
+                className="h-2" 
+              />
             </div>
           </div>
         </CardContent>
@@ -141,44 +286,53 @@ export default function Billing() {
       <div>
         <h2 className="text-xl font-semibold text-foreground mb-4">Available Plans</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              variant={plan.popular ? "glow" : "glass"}
-              className={plan.popular ? "relative" : ""}
-            >
-              {plan.popular && (
-                <Badge variant="info" className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  Most Popular
-                </Badge>
-              )}
-              <CardHeader className="text-center pb-2">
-                <CardTitle className="text-lg">{plan.name}</CardTitle>
-                <div className="mt-2">
-                  <span className="text-4xl font-bold text-foreground">${plan.price}</span>
-                  <span className="text-muted-foreground">/mo</span>
-                </div>
-                <CardDescription>{plan.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-2">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-success flex-shrink-0" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  variant={plan.popular ? "gradient" : "glass"}
-                  className="w-full"
-                >
-                  {plan.name === "Pro" ? "Current Plan" : "Upgrade"}
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+          {plans.map((plan) => {
+            const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
+            const isPopular = plan.plan_slug === "pro";
+            
+            return (
+              <Card
+                key={plan.id}
+                variant={isPopular ? "glow" : "glass"}
+                className={isPopular ? "relative" : ""}
+              >
+                {isPopular && (
+                  <Badge variant="info" className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    Most Popular
+                  </Badge>
+                )}
+                <CardHeader className="text-center pb-2">
+                  <CardTitle className="text-lg">{plan.plan_name}</CardTitle>
+                  <div className="mt-2">
+                    <span className="text-4xl font-bold text-foreground">${plan.price}</span>
+                    <span className="text-muted-foreground">/mo</span>
+                  </div>
+                  <CardDescription>
+                    {plan.max_projects === 999999 ? "Unlimited" : plan.max_projects} projects, {" "}
+                    {plan.max_subscribers === 999999 ? "Unlimited" : plan.max_subscribers.toLocaleString()} subscribers
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <ul className="space-y-2">
+                    {plan.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-center gap-2 text-sm">
+                        <Check className="h-4 w-4 text-success flex-shrink-0" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    variant={isCurrentPlan ? "outline" : isPopular ? "gradient" : "glass"}
+                    className="w-full"
+                    disabled={isCurrentPlan}
+                  >
+                    {isCurrentPlan ? "Current Plan" : "Upgrade"}
+                    {!isCurrentPlan && <ArrowRight className="h-4 w-4 ml-2" />}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
@@ -191,23 +345,33 @@ export default function Billing() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {paymentHistory.map((payment) => (
-              <div
-                key={payment.id}
-                className="flex items-center justify-between p-4 rounded-lg bg-muted/30"
-              >
-                <div>
-                  <p className="font-medium text-foreground">{payment.plan} Plan</p>
-                  <p className="text-sm text-muted-foreground">{payment.date}</p>
+          {payments.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No payment history yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {payments.map((payment) => (
+                <div
+                  key={payment.id}
+                  className="flex items-center justify-between p-4 rounded-lg bg-muted/30"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{payment.plan_name} Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(new Date(payment.created_at), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-foreground">${payment.amount.toFixed(2)}</p>
+                    <Badge variant={payment.status === "paid" ? "success" : "warning"}>
+                      {payment.status === "paid" ? "Paid" : payment.status}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold text-foreground">{payment.amount}</p>
-                  <Badge variant="success">Paid</Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
