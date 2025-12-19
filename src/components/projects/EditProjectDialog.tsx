@@ -1,0 +1,406 @@
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Settings, CreditCard, Wallet, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+const projectSchema = z.object({
+  project_name: z.string().min(3).max(50),
+  support_contact: z.string().optional(),
+  stripe_enabled: z.boolean(),
+  stripe_public_key: z.string().optional(),
+  stripe_secret_key: z.string().optional(),
+  manual_enabled: z.boolean(),
+  manual_instructions: z.string().optional(),
+});
+
+type ProjectFormData = z.infer<typeof projectSchema>;
+
+interface Project {
+  id: string;
+  project_name: string;
+  bot_token: string;
+  channel_id: string;
+  support_contact: string | null;
+  status: string | null;
+  admin_telegram_id: number | null;
+  admin_username: string | null;
+  stripe_config: any;
+  manual_payment_config: any;
+}
+
+interface EditProjectDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  project: Project | null;
+  onSuccess: () => void;
+}
+
+export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: EditProjectDialogProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const form = useForm<ProjectFormData>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: {
+      project_name: "",
+      support_contact: "",
+      stripe_enabled: false,
+      stripe_public_key: "",
+      stripe_secret_key: "",
+      manual_enabled: true,
+      manual_instructions: "",
+    },
+  });
+
+  useEffect(() => {
+    if (project) {
+      form.reset({
+        project_name: project.project_name,
+        support_contact: project.support_contact || "",
+        stripe_enabled: project.stripe_config?.enabled || false,
+        stripe_public_key: project.stripe_config?.public_key || "",
+        stripe_secret_key: "",
+        manual_enabled: project.manual_payment_config?.enabled ?? true,
+        manual_instructions: project.manual_payment_config?.instructions || "",
+      });
+    }
+  }, [project, form]);
+
+  const onSubmit = async (data: ProjectFormData) => {
+    if (!project) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const stripeConfig = {
+        enabled: data.stripe_enabled,
+        public_key: data.stripe_public_key || "",
+        ...(data.stripe_secret_key ? { secret_key: data.stripe_secret_key } : {}),
+      };
+
+      const manualConfig = {
+        enabled: data.manual_enabled,
+        instructions: data.manual_instructions || "",
+      };
+
+      const { error } = await supabase
+        .from("projects")
+        .update({
+          project_name: data.project_name,
+          support_contact: data.support_contact || null,
+          stripe_config: stripeConfig,
+          manual_payment_config: manualConfig,
+        })
+        .eq("id", project.id);
+
+      if (error) throw error;
+
+      toast.success("Project updated successfully!");
+      onOpenChange(false);
+      onSuccess();
+    } catch (error: any) {
+      toast.error("Failed to update project", { description: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!project) return;
+
+    setIsDeleting(true);
+
+    try {
+      const { error } = await supabase.from("projects").delete().eq("id", project.id);
+
+      if (error) throw error;
+
+      toast.success("Project deleted successfully!");
+      onOpenChange(false);
+      onSuccess();
+    } catch (error: any) {
+      toast.error("Failed to delete project", { description: error.message });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-primary" />
+            Project Settings
+          </SheetTitle>
+          <SheetDescription>
+            Configure your project settings and payment methods.
+          </SheetDescription>
+        </SheetHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
+            <Tabs defaultValue="general" className="w-full">
+              <TabsList className="w-full grid grid-cols-3">
+                <TabsTrigger value="general">General</TabsTrigger>
+                <TabsTrigger value="stripe">Stripe</TabsTrigger>
+                <TabsTrigger value="manual">Manual</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="general" className="space-y-4 mt-4">
+                <FormField
+                  control={form.control}
+                  name="project_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project Name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="support_contact"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Support Contact</FormLabel>
+                      <FormControl>
+                        <Input placeholder="@username or email" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        How subscribers can reach you for support
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-destructive text-sm">Danger Zone</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm" className="gap-2">
+                          <Trash2 className="h-4 w-4" />
+                          Delete Project
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the project
+                            and all associated plans and subscriber data.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDelete}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {isDeleting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Delete"
+                            )}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="stripe" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-base">Stripe Payments</CardTitle>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="stripe_enabled"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <CardDescription>
+                      Accept credit card payments via Stripe
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="stripe_public_key"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Publishable Key</FormLabel>
+                          <FormControl>
+                            <Input placeholder="pk_live_..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="stripe_secret_key"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Secret Key</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="sk_live_... (leave empty to keep existing)"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Your secret key is encrypted and stored securely
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="manual" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-base">Manual Payments</CardTitle>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="manual_enabled"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <CardDescription>
+                      Accept bank transfers, crypto, or other manual payments
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <FormField
+                      control={form.control}
+                      name="manual_instructions"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Instructions</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Enter payment instructions that will be shown to subscribers...&#10;&#10;Example:&#10;Bank: XYZ Bank&#10;Account: 1234567890&#10;&#10;Or send USDT to: 0x..."
+                              className="min-h-[150px]"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Markdown formatting is supported
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="gradient"
+                className="flex-1"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </SheetContent>
+    </Sheet>
+  );
+}
