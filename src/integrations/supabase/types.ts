@@ -14,16 +14,414 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      client_subscription_payments: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_proof_url: string | null
+          plan_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          subscription_id: string | null
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_subscription_payments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_subscription_payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "client_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_subscriptions: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string | null
+          status: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          created_at: string | null
+          currency: string | null
+          description: string | null
+          duration_days: number
+          id: string
+          is_active: boolean | null
+          plan_name: string
+          price: number
+          project_id: string
+          stripe_price_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          duration_days: number
+          id?: string
+          is_active?: boolean | null
+          plan_name: string
+          price: number
+          project_id: string
+          stripe_price_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          currency?: string | null
+          description?: string | null
+          duration_days?: number
+          id?: string
+          is_active?: boolean | null
+          plan_name?: string
+          price?: number
+          project_id?: string
+          stripe_price_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_config: {
+        Row: {
+          id: string
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          admin_telegram_id: number | null
+          admin_username: string | null
+          bot_token: string
+          channel_id: string
+          created_at: string | null
+          id: string
+          manual_payment_config: Json | null
+          project_name: string
+          status: string | null
+          stripe_config: Json | null
+          support_contact: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_telegram_id?: number | null
+          admin_username?: string | null
+          bot_token: string
+          channel_id: string
+          created_at?: string | null
+          id?: string
+          manual_payment_config?: Json | null
+          project_name: string
+          status?: string | null
+          stripe_config?: Json | null
+          support_contact?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_telegram_id?: number | null
+          admin_username?: string | null
+          bot_token?: string
+          channel_id?: string
+          created_at?: string | null
+          id?: string
+          manual_payment_config?: Json | null
+          project_name?: string
+          status?: string | null
+          stripe_config?: Json | null
+          support_contact?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscribers: {
+        Row: {
+          approved_by_admin_id: string | null
+          created_at: string | null
+          expiry_date: string | null
+          expiry_reminder_sent: boolean | null
+          final_reminder_sent: boolean | null
+          first_name: string | null
+          id: string
+          invite_link: string | null
+          notes: string | null
+          payment_method: string | null
+          payment_proof_url: string | null
+          plan_id: string | null
+          project_id: string
+          start_date: string | null
+          status: Database["public"]["Enums"]["subscriber_status"]
+          telegram_user_id: number
+          updated_at: string | null
+          username: string | null
+        }
+        Insert: {
+          approved_by_admin_id?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          expiry_reminder_sent?: boolean | null
+          final_reminder_sent?: boolean | null
+          first_name?: string | null
+          id?: string
+          invite_link?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          project_id: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["subscriber_status"]
+          telegram_user_id: number
+          updated_at?: string | null
+          username?: string | null
+        }
+        Update: {
+          approved_by_admin_id?: string | null
+          created_at?: string | null
+          expiry_date?: string | null
+          expiry_reminder_sent?: boolean | null
+          final_reminder_sent?: boolean | null
+          first_name?: string | null
+          id?: string
+          invite_link?: string | null
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          project_id?: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["subscriber_status"]
+          telegram_user_id?: number
+          updated_at?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscribers_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscribers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_plans: {
+        Row: {
+          billing_cycle: string | null
+          created_at: string | null
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          max_projects: number
+          max_subscribers: number
+          plan_name: string
+          plan_slug: string
+          price: number
+        }
+        Insert: {
+          billing_cycle?: string | null
+          created_at?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_projects?: number
+          max_subscribers?: number
+          plan_name: string
+          plan_slug: string
+          price?: number
+        }
+        Update: {
+          billing_cycle?: string | null
+          created_at?: string | null
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_projects?: number
+          max_subscribers?: number
+          plan_name?: string
+          plan_slug?: string
+          price?: number
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "super_admin" | "client"
+      subscriber_status:
+        | "active"
+        | "pending_payment"
+        | "pending_approval"
+        | "awaiting_proof"
+        | "expired"
+        | "rejected"
+      subscription_status: "trial" | "active" | "pending_payment" | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +548,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["super_admin", "client"],
+      subscriber_status: [
+        "active",
+        "pending_payment",
+        "pending_approval",
+        "awaiting_proof",
+        "expired",
+        "rejected",
+      ],
+      subscription_status: ["trial", "active", "pending_payment", "expired"],
+    },
   },
 } as const
