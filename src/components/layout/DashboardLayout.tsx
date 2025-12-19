@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
+import PageTransition from "@/components/PageTransition";
 
 interface DashboardLayoutProps {
   isAdmin?: boolean;
@@ -26,20 +27,22 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen flex w-full">
-      <Sidebar
-        isAdmin={isAdmin}
-        collapsed={sidebarCollapsed}
-        onCollapsedChange={setSidebarCollapsed}
-      />
-      <main className={cn(
-        "flex-1 min-h-screen",
-        "p-6 md:p-8"
-      )}>
-        <div className="max-w-7xl mx-auto animate-fade-in">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+    <PageTransition>
+      <div className="min-h-screen flex w-full">
+        <Sidebar
+          isAdmin={isAdmin}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
+        />
+        <main className={cn(
+          "flex-1 min-h-screen",
+          "p-6 md:p-8"
+        )}>
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </PageTransition>
   );
 }
