@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -20,9 +21,24 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
+      // Check user role and redirect accordingly
+      checkRoleAndRedirect(user.id);
+    }
+  }, [user]);
+
+  const checkRoleAndRedirect = async (userId: string) => {
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+
+    if (roleData?.role === "super_admin") {
+      navigate("/super-admin");
+    } else {
       navigate("/dashboard");
     }
-  }, [user, navigate]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +65,7 @@ export default function Login() {
     }
 
     toast.success("Login successful!", {
-      description: "Redirecting to dashboard...",
+      description: "Redirecting...",
     });
   };
 
