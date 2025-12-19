@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, CreditCard, Wallet, Loader2, Trash2 } from "lucide-react";
+import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -74,6 +74,13 @@ interface EditProjectDialogProps {
 export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: EditProjectDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettingWebhook, setIsSettingWebhook] = useState(false);
+  const [webhookStatus, setWebhookStatus] = useState<"idle" | "success" | "error">("idle");
+  const [copied, setCopied] = useState(false);
+
+  const webhookUrl = project
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-handler?project_id=${project.id}`
+    : "";
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -161,6 +168,48 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     }
   };
 
+  const handleSetupWebhook = async () => {
+    if (!project) return;
+
+    setIsSettingWebhook(true);
+    setWebhookStatus("idle");
+
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${project.bot_token}/setWebhook`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: webhookUrl }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.ok) {
+        setWebhookStatus("success");
+        toast.success("Webhook configured successfully!", {
+          description: "Your bot is now ready to receive messages.",
+        });
+      } else {
+        setWebhookStatus("error");
+        toast.error("Failed to set webhook", { description: data.description });
+      }
+    } catch (error: any) {
+      setWebhookStatus("error");
+      toast.error("Failed to set webhook", { description: error.message });
+    } finally {
+      setIsSettingWebhook(false);
+    }
+  };
+
+  const copyWebhookUrl = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    toast.success("Webhook URL copied!");
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -214,6 +263,65 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                     </FormItem>
                   )}
                 />
+
+                {/* Webhook Setup Card */}
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <Webhook className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-sm">Telegram Webhook</CardTitle>
+                    </div>
+                    <CardDescription>
+                      Configure your bot to receive messages automatically
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={webhookUrl}
+                        readOnly
+                        className="text-xs font-mono bg-muted/50"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={copyWebhookUrl}
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={webhookStatus === "success" ? "outline" : "default"}
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={handleSetupWebhook}
+                      disabled={isSettingWebhook}
+                    >
+                      {isSettingWebhook ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Setting up...
+                        </>
+                      ) : webhookStatus === "success" ? (
+                        <>
+                          <Check className="h-4 w-4 text-green-500" />
+                          Webhook Active
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="h-4 w-4" />
+                          Setup Webhook
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
 
                 <Card className="border-destructive/30 bg-destructive/5">
                   <CardHeader className="pb-2">
