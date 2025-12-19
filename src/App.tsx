@@ -25,6 +25,12 @@ import Billing from "@/pages/Billing";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
 
+// Admin Pages
+import AdminOverview from "@/pages/admin/AdminOverview";
+import AdminClients from "@/pages/admin/AdminClients";
+import AdminPayments from "@/pages/admin/AdminPayments";
+import AdminSettings from "@/pages/admin/AdminSettings";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -54,6 +60,14 @@ const App = () => (
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/billing" element={<Billing />} />
               <Route path="/settings" element={<Settings />} />
+            </Route>
+
+            {/* Super Admin Routes */}
+            <Route element={<DashboardLayout isAdmin />}>
+              <Route path="/super-admin" element={<AdminOverview />} />
+              <Route path="/super-admin/clients" element={<AdminClients />} />
+              <Route path="/super-admin/payments" element={<AdminPayments />} />
+              <Route path="/super-admin/settings" element={<AdminSettings />} />
             </Route>
 
             {/* Catch-all */}
