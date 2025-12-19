@@ -13,7 +13,6 @@ import {
   Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -41,12 +40,13 @@ const adminNavItems: NavItem[] = [
 
 interface SidebarProps {
   isAdmin?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export function Sidebar({ isAdmin = false }: SidebarProps) {
+export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
   const { user, signOut } = useAuth();
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
@@ -158,7 +158,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => onCollapsedChange?.(!collapsed)}
           className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-card border border-border shadow-md"
         >
           <ChevronLeft className={cn(

@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
+import { useState } from "react";
 
 interface DashboardLayoutProps {
   isAdmin?: boolean;
@@ -10,6 +11,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   const { user, loading } = useAuth();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (loading) {
     return (
@@ -25,10 +27,11 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen">
-      <Sidebar isAdmin={isAdmin} />
+      <Sidebar isAdmin={isAdmin} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
       <main className={cn(
-        "transition-all duration-300 pl-[280px] min-h-screen",
-        "p-6 md:p-8"
+        "transition-all duration-300 min-h-screen",
+        "p-6 md:p-8",
+        sidebarCollapsed ? "pl-[92px]" : "pl-[280px]"
       )}>
         <div className="max-w-7xl mx-auto animate-fade-in">
           <Outlet />
