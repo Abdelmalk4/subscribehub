@@ -44,6 +44,7 @@ interface ProjectStats {
   [projectId: string]: {
     subscribers: number;
     revenue: number;
+    lifetimeRevenue: number;
     plans: number;
   };
 }
@@ -74,15 +75,34 @@ export default function Projects() {
       // Fetch stats for each project
       const stats: ProjectStats = {};
       for (const project of data || []) {
-        // Get active subscribers with their plan prices for revenue calculation
-        const { data: activeSubscribers, count: subsCount } = await supabase
+        // Get active subscribers count
+        const { count: subsCount } = await supabase
           .from("subscribers")
-          .select("plan_id, plans(price)", { count: "exact" })
+          .select("*", { count: "exact", head: true })
           .eq("project_id", project.id)
           .eq("status", "active");
 
-        // Calculate total revenue from active subscribers' plan prices
-        const revenue = (activeSubscribers || []).reduce((total, sub) => {
+        // Get all subscribers who have ever paid (active + expired) for lifetime revenue
+        const { data: paidSubscribers } = await supabase
+          .from("subscribers")
+          .select("plan_id, plans(price)")
+          .eq("project_id", project.id)
+          .in("status", ["active", "expired"]);
+
+        // Calculate lifetime revenue from all paid subscribers
+        const lifetimeRevenue = (paidSubscribers || []).reduce((total, sub) => {
+          const planPrice = (sub.plans as { price: number } | null)?.price || 0;
+          return total + Number(planPrice);
+        }, 0);
+
+        // Calculate current month revenue (active subscribers only)
+        const { data: activeSubscribers } = await supabase
+          .from("subscribers")
+          .select("plan_id, plans(price)")
+          .eq("project_id", project.id)
+          .eq("status", "active");
+
+        const currentRevenue = (activeSubscribers || []).reduce((total, sub) => {
           const planPrice = (sub.plans as { price: number } | null)?.price || 0;
           return total + Number(planPrice);
         }, 0);
@@ -96,7 +116,8 @@ export default function Projects() {
 
         stats[project.id] = {
           subscribers: subsCount || 0,
-          revenue: revenue,
+          revenue: currentRevenue,
+          lifetimeRevenue: lifetimeRevenue,
           plans: plansCount || 0,
         };
       }
@@ -168,7 +189,7 @@ export default function Projects() {
       {/* Projects Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {projects.map((project) => {
-          const stats = projectStats[project.id] || { subscribers: 0, revenue: 0, plans: 0 };
+          const stats = projectStats[project.id] || { subscribers: 0, revenue: 0, lifetimeRevenue: 0, plans: 0 };
           
           return (
             <Card key={project.id} variant="glass-hover" className="group">
@@ -190,20 +211,28 @@ export default function Projects() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-4 py-4 border-y border-border/30">
+                <div className="grid grid-cols-2 gap-4 py-4 border-y border-border/30">
                   <div className="text-center">
                     <p className="text-2xl font-bold text-foreground">{stats.subscribers}</p>
-                    <p className="text-xs text-muted-foreground">Subs</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">
-                      ${stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Revenue</p>
+                    <p className="text-xs text-muted-foreground">Active Subs</p>
                   </div>
                   <div className="text-center">
                     <p className="text-2xl font-bold text-foreground">{stats.plans}</p>
                     <p className="text-xs text-muted-foreground">Plans</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 pb-2">
+                  <div className="text-center p-3 rounded-lg bg-muted/30">
+                    <p className="text-lg font-bold text-foreground">
+                      ${stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Current</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-primary/10">
+                    <p className="text-lg font-bold text-primary">
+                      ${stats.lifetimeRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Lifetime</p>
                   </div>
                 </div>
 
