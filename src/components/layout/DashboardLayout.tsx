@@ -26,12 +26,15 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen">
-      <Sidebar isAdmin={isAdmin} collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+    <div className="min-h-screen flex w-full">
+      <Sidebar
+        isAdmin={isAdmin}
+        collapsed={sidebarCollapsed}
+        onCollapsedChange={setSidebarCollapsed}
+      />
       <main className={cn(
-        "transition-all duration-300 min-h-screen",
-        "p-6 md:p-8",
-        sidebarCollapsed ? "pl-[92px]" : "pl-[280px]"
+        "flex-1 min-h-screen",
+        "p-6 md:p-8"
       )}>
         <div className="max-w-7xl mx-auto animate-fade-in">
           <Outlet />

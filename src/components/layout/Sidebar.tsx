@@ -75,7 +75,7 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 h-screen transition-all duration-300",
+        "sticky top-0 z-30 h-screen transition-all duration-300 shrink-0",
         collapsed ? "w-20" : "w-64"
       )}
     >
