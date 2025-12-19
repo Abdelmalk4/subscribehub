@@ -191,6 +191,18 @@
     animation: glowPulse 2s ease-in-out infinite;
   }
 
+  /* Fade in up for scroll animations */
+  .fade-in-up {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.6s ease-out;
+  }
+
+  .fade-in-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   /* Bento Grid */
   .bento-grid {
     @apply grid gap-4 md:gap-6;
@@ -203,6 +215,23 @@
 
   .bento-span-3 {
     @apply col-span-1 md:col-span-3;
+  }
+
+  /* Button Glow Effect */
+  .btn-glow:hover {
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.4);
+  }
+
+  /* Logo grayscale hover effect */
+  .logo-grayscale {
+    filter: grayscale(100%);
+    opacity: 0.5;
+    transition: all 0.3s ease;
+  }
+
+  .logo-grayscale:hover {
+    filter: grayscale(0%);
+    opacity: 1;
   }
 
   /* Scrollbar Styling */
