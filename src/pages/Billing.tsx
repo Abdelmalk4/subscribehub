@@ -396,12 +396,12 @@ export default function Billing() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Projects</span>
-                  <span className="font-medium text-foreground">
-                    {projectCount} / {getProjectLimit() === 999999 ? "∞" : getProjectLimit()}
+                <span className="font-medium text-foreground">
+                    {projectCount} / {getProjectLimit() < 0 ? "∞" : getProjectLimit()}
                   </span>
                 </div>
                 <Progress 
-                  value={getProjectLimit() === 999999 ? 0 : (projectCount / getProjectLimit()) * 100} 
+                  value={getProjectLimit() < 0 ? 0 : (projectCount / getProjectLimit()) * 100} 
                   className="h-2" 
                 />
               </div>
@@ -409,11 +409,11 @@ export default function Billing() {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subscribers</span>
                   <span className="font-medium text-foreground">
-                    {subscriberCount} / {getSubscriberLimit() === 999999 ? "∞" : getSubscriberLimit().toLocaleString()}
+                    {subscriberCount} / {getSubscriberLimit() < 0 ? "∞" : getSubscriberLimit().toLocaleString()}
                   </span>
                 </div>
                 <Progress 
-                  value={getSubscriberLimit() === 999999 ? 0 : (subscriberCount / getSubscriberLimit()) * 100} 
+                  value={getSubscriberLimit() < 0 ? 0 : (subscriberCount / getSubscriberLimit()) * 100} 
                   className="h-2" 
                 />
               </div>
@@ -449,8 +449,8 @@ export default function Billing() {
                     <span className="text-muted-foreground">/mo</span>
                   </div>
                   <CardDescription>
-                    {plan.max_projects === 999999 ? "Unlimited" : plan.max_projects} projects, {" "}
-                    {plan.max_subscribers === 999999 ? "Unlimited" : plan.max_subscribers.toLocaleString()} subscribers
+                    {plan.max_projects < 0 ? "Unlimited" : plan.max_projects} projects, {" "}
+                    {plan.max_subscribers < 0 ? "Unlimited" : plan.max_subscribers.toLocaleString()} subscribers
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
