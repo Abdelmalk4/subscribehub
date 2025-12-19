@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface NavItem {
   label: string;
@@ -43,9 +45,32 @@ interface SidebarProps {
 
 export function Sidebar({ isAdmin = false }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const { user, signOut } = useAuth();
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("Signed out successfully");
+    navigate("/login");
+  };
+
+  // Get user initials
+  const getInitials = () => {
+    const email = user?.email || "";
+    const name = user?.user_metadata?.full_name || email;
+    if (name.includes(" ")) {
+      const parts = name.split(" ");
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const getDisplayName = () => {
+    return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
+  };
 
   return (
     <aside
@@ -106,12 +131,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
             collapsed && "justify-center"
           )}>
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-secondary/50 flex items-center justify-center">
-              <span className="text-sm font-semibold text-foreground">JD</span>
+              <span className="text-sm font-semibold text-foreground">{getInitials()}</span>
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">John Doe</p>
-                <p className="text-xs text-muted-foreground truncate">Pro Plan</p>
+                <p className="text-sm font-medium text-foreground truncate">{getDisplayName()}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             )}
           </div>
@@ -122,6 +147,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
               "w-full mt-2 text-muted-foreground hover:text-destructive",
               collapsed && "px-0"
             )}
+            onClick={handleSignOut}
           >
             <LogOut className="h-4 w-4" />
             {!collapsed && <span className="ml-2">Sign Out</span>}

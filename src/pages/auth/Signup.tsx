@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, User } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -15,6 +16,15 @@ export default function Signup() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const { signUp, user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreeTerms) {
@@ -23,13 +33,29 @@ export default function Signup() {
     }
     setIsLoading(true);
     
-    // Simulate signup - will be replaced with Supabase auth
-    setTimeout(() => {
+    const { error } = await signUp(email, password, name);
+
+    if (error) {
       setIsLoading(false);
-      toast.success("Account created!", {
-        description: "Welcome to SubscribeHub! Enjoy your 14-day free trial.",
-      });
-    }, 1500);
+      if (error.message.includes("already registered")) {
+        toast.error("Email already registered", {
+          description: "Please sign in instead or use a different email.",
+        });
+      } else if (error.message.includes("Password")) {
+        toast.error("Invalid password", {
+          description: error.message,
+        });
+      } else {
+        toast.error("Signup failed", {
+          description: error.message,
+        });
+      }
+      return;
+    }
+
+    toast.success("Account created!", {
+      description: "Welcome to SubscribeHub! Enjoy your 14-day free trial.",
+    });
   };
 
   return (

@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,18 +14,43 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const { signIn, user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate login - will be replaced with Supabase auth
-    setTimeout(() => {
+    const { error } = await signIn(email, password);
+    
+    if (error) {
       setIsLoading(false);
-      toast.success("Login successful!", {
-        description: "Redirecting to dashboard...",
-      });
-    }, 1500);
+      if (error.message.includes("Invalid login credentials")) {
+        toast.error("Invalid email or password", {
+          description: "Please check your credentials and try again.",
+        });
+      } else if (error.message.includes("Email not confirmed")) {
+        toast.error("Email not confirmed", {
+          description: "Please check your inbox for a confirmation email.",
+        });
+      } else {
+        toast.error("Login failed", {
+          description: error.message,
+        });
+      }
+      return;
+    }
+
+    toast.success("Login successful!", {
+      description: "Redirecting to dashboard...",
+    });
   };
 
   return (
