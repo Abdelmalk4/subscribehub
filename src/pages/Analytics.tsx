@@ -19,6 +19,7 @@ import {
   UserCheck,
   UserX,
   BarChart3,
+  Wallet,
 } from "lucide-react";
 import {
   AreaChart,
@@ -53,6 +54,7 @@ interface DailyStats {
   newSubscribers: number;
   expired: number;
   revenue: number;
+  cumulativeRevenue: number;
 }
 
 interface PlanRevenue {
@@ -89,6 +91,7 @@ export default function Analytics() {
   const [projectStats, setProjectStats] = useState<ProjectStats[]>([]);
   const [retentionRate, setRetentionRate] = useState(0);
   const [avgRevenuePerUser, setAvgRevenuePerUser] = useState(0);
+  const [lifetimeRevenue, setLifetimeRevenue] = useState(0);
 
   const fetchAnalytics = async () => {
     if (!user) return;
@@ -128,8 +131,8 @@ export default function Analytics() {
         : 0;
       setRetentionRate(retention);
 
-      // Fetch all subscribers with plans for revenue calculation
-      const { data: subscribersWithPlans } = await supabase
+      // Fetch all subscribers with plans for revenue calculation (active only for current)
+      const { data: activeSubscribers } = await supabase
         .from("subscribers")
         .select(`
           *,
@@ -138,14 +141,24 @@ export default function Analytics() {
         `)
         .eq("status", "active" as any);
 
-      // Calculate total revenue and avg per user
-      let totalRevenue = 0;
+      // Fetch all paid subscribers (active + expired) for lifetime revenue
+      const { data: allPaidSubscribers } = await supabase
+        .from("subscribers")
+        .select(`
+          *,
+          plans(plan_name, price, currency),
+          projects(project_name)
+        `)
+        .in("status", ["active", "expired"] as any);
+
+      // Calculate current revenue (active only)
+      let currentRevenue = 0;
       const planRevenueMap: Record<string, { revenue: number; subscribers: number }> = {};
       const projectRevenueMap: Record<string, { subscribers: number; revenue: number }> = {};
 
-      (subscribersWithPlans || []).forEach((sub: any) => {
+      (activeSubscribers || []).forEach((sub: any) => {
         const price = sub.plans?.price || 0;
-        totalRevenue += price;
+        currentRevenue += price;
 
         // Aggregate by plan
         const planName = sub.plans?.plan_name || "Unknown";
@@ -164,7 +177,14 @@ export default function Analytics() {
         projectRevenueMap[projectName].revenue += price;
       });
 
-      setAvgRevenuePerUser(statusCounts.active > 0 ? totalRevenue / statusCounts.active : 0);
+      // Calculate lifetime revenue (active + expired)
+      let totalLifetimeRevenue = 0;
+      (allPaidSubscribers || []).forEach((sub: any) => {
+        totalLifetimeRevenue += sub.plans?.price || 0;
+      });
+      setLifetimeRevenue(totalLifetimeRevenue);
+
+      setAvgRevenuePerUser(statusCounts.active > 0 ? currentRevenue / statusCounts.active : 0);
 
       // Convert maps to arrays
       setPlanRevenue(
@@ -185,27 +205,52 @@ export default function Analytics() {
         end: new Date(),
       });
 
-      // Fetch subscribers created in period
-      const { data: newSubscribers } = await supabase
+      // Fetch ALL subscribers with plans for cumulative revenue (including expired)
+      const { data: allSubscribers } = await supabase
+        .from("subscribers")
+        .select("created_at, status, plans(price)")
+        .in("status", ["active", "expired"] as any)
+        .order("created_at", { ascending: true });
+
+      // Fetch subscribers created in selected period
+      const { data: periodSubscribers } = await supabase
         .from("subscribers")
         .select("created_at, status, plans(price)")
         .gte("created_at", startDate.toISOString());
 
-      // Group by date
+      // Calculate cumulative revenue up to start date (baseline)
+      let baselineRevenue = 0;
+      (allSubscribers || []).forEach((sub: any) => {
+        if (sub.created_at && parseISO(sub.created_at) < startDate) {
+          baselineRevenue += sub.plans?.price || 0;
+        }
+      });
+
+      // Group by date and calculate cumulative revenue
+      let runningTotal = baselineRevenue;
       const dailyData: DailyStats[] = dateRange.map((date) => {
         const dateStr = format(date, "yyyy-MM-dd");
-        const daySubscribers = (newSubscribers || []).filter(
+        
+        // Subscribers created on this day (from period query)
+        const daySubscribers = (periodSubscribers || []).filter(
           (s: any) => s.created_at && format(parseISO(s.created_at), "yyyy-MM-dd") === dateStr
         );
 
+        // Subscribers that expired on this day
+        const expiredOnDay = (allSubscribers || []).filter(
+          (s: any) => s.status === "expired" && s.created_at && format(parseISO(s.created_at), "yyyy-MM-dd") === dateStr
+        ).length;
+
         const newSubs = daySubscribers.length;
-        const revenue = daySubscribers.reduce((sum: number, s: any) => sum + (s.plans?.price || 0), 0);
+        const dayRevenue = daySubscribers.reduce((sum: number, s: any) => sum + (s.plans?.price || 0), 0);
+        runningTotal += dayRevenue;
         
         return {
           date: format(date, "MMM d"),
           newSubscribers: newSubs,
-          expired: 0, // Would need to track this separately
-          revenue,
+          expired: expiredOnDay,
+          revenue: dayRevenue,
+          cumulativeRevenue: runningTotal,
         };
       });
 
@@ -231,9 +276,18 @@ export default function Analytics() {
 
   const kpis = [
     {
-      title: "Total Revenue",
+      title: "Lifetime Revenue",
+      value: `$${lifetimeRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: "All time",
+      isPositive: true,
+      icon: Wallet,
+      color: "text-primary",
+      bgColor: "bg-primary/20",
+    },
+    {
+      title: "Current Revenue",
       value: `$${totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      change: "+12%",
+      change: "Active subs",
       isPositive: true,
       icon: DollarSign,
       color: "text-success",
@@ -242,29 +296,29 @@ export default function Analytics() {
     {
       title: "Active Subscribers",
       value: subscriberStats.active.toString(),
-      change: `+${Math.round(subscriberStats.active * 0.15)}`,
+      change: `${subscriberStats.total} total`,
       isPositive: true,
       icon: UserCheck,
-      color: "text-primary",
-      bgColor: "bg-primary/20",
+      color: "text-secondary",
+      bgColor: "bg-secondary/20",
     },
     {
       title: "Retention Rate",
       value: `${retentionRate}%`,
-      change: retentionRate >= 80 ? "+5%" : "-2%",
-      isPositive: retentionRate >= 80,
+      change: retentionRate >= 80 ? "Excellent" : retentionRate >= 50 ? "Good" : "Needs work",
+      isPositive: retentionRate >= 50,
       icon: TrendingUp,
-      color: retentionRate >= 80 ? "text-success" : "text-warning",
-      bgColor: retentionRate >= 80 ? "bg-success/20" : "bg-warning/20",
+      color: retentionRate >= 80 ? "text-success" : retentionRate >= 50 ? "text-warning" : "text-destructive",
+      bgColor: retentionRate >= 80 ? "bg-success/20" : retentionRate >= 50 ? "bg-warning/20" : "bg-destructive/20",
     },
     {
       title: "Avg Revenue/User",
       value: `$${avgRevenuePerUser.toFixed(2)}`,
-      change: "+$5.20",
-      isPositive: true,
+      change: "Per active sub",
+      isPositive: avgRevenuePerUser > 0,
       icon: BarChart3,
-      color: "text-secondary",
-      bgColor: "bg-secondary/20",
+      color: "text-accent-foreground",
+      bgColor: "bg-accent/20",
     },
   ];
 
@@ -303,7 +357,7 @@ export default function Analytics() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {kpis.map((kpi) => (
           <Card key={kpi.title} variant="glass-hover">
             <CardContent className="pt-6">
@@ -461,6 +515,74 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cumulative Revenue Chart */}
+      <Card variant="glass">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              Cumulative Revenue Over Time
+            </CardTitle>
+            <Badge variant="outline" className="text-primary border-primary/30">
+              Lifetime: ${lifetimeRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            {dailyStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dailyStats}>
+                  <defs>
+                    <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(270, 91%, 65%)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="hsl(270, 91%, 65%)" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 30%, 20%)" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(215, 20%, 65%)" 
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    stroke="hsl(215, 20%, 65%)" 
+                    fontSize={12}
+                    tickLine={false}
+                    tickFormatter={(value) => `$${value.toLocaleString()}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(220, 45%, 13%)",
+                      border: "1px solid hsl(220, 30%, 20%)",
+                      borderRadius: "8px",
+                    }}
+                    formatter={(value: number) => [`$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Cumulative Revenue"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="cumulativeRevenue"
+                    name="Cumulative Revenue"
+                    stroke="hsl(270, 91%, 65%)"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorCumulative)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <Wallet className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No revenue data yet</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
