@@ -1,10 +1,11 @@
-import { Outlet, Navigate } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import PageTransition from "@/components/PageTransition";
+import { SubscriptionGuard } from "@/components/subscription/SubscriptionGuard";
 
 interface DashboardLayoutProps {
   isAdmin?: boolean;
@@ -13,6 +14,11 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   const { user, loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+
+  // Pages that should NOT show subscription guard (always accessible)
+  const unprotectedPaths = ['/billing', '/settings'];
+  const shouldShowGuard = !isAdmin && !unprotectedPaths.includes(location.pathname);
 
   if (loading) {
     return (
@@ -26,7 +32,7 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
     return <Navigate to="/login" replace />;
   }
 
-  return (
+  const content = (
     <PageTransition>
       <div className="min-h-screen flex w-full">
         <Sidebar
@@ -45,4 +51,11 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
       </div>
     </PageTransition>
   );
+
+  // Wrap with subscription guard for protected routes
+  if (shouldShowGuard) {
+    return <SubscriptionGuard>{content}</SubscriptionGuard>;
+  }
+
+  return content;
 }
