@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import PageTransition from "@/components/PageTransition";
 import LandingNavbar from "@/components/landing/LandingNavbar";
 import HeroSection from "@/components/landing/HeroSection";
 import SocialProofSection from "@/components/landing/SocialProofSection";
@@ -39,19 +40,21 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden">
-      <LandingNavbar onNavigate={handleNavigate} />
-      <main>
-        <HeroSection />
-        <SocialProofSection />
-        <FeaturesSection />
-        <HowItWorksSection />
-        <PricingSection />
-        <TestimonialsSection />
-        <FAQSection />
-        <CTABanner />
-      </main>
-      <Footer />
-    </div>
+    <PageTransition>
+      <div className="min-h-screen overflow-hidden">
+        <LandingNavbar onNavigate={handleNavigate} />
+        <main>
+          <HeroSection />
+          <SocialProofSection />
+          <FeaturesSection />
+          <HowItWorksSection />
+          <PricingSection />
+          <TestimonialsSection />
+          <FAQSection />
+          <CTABanner />
+        </main>
+        <Footer />
+      </div>
+    </PageTransition>
   );
 }
