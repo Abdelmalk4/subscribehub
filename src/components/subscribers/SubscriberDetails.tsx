@@ -84,6 +84,17 @@ const statusConfig: Record<string, { label: string; variant: "success" | "warnin
   rejected: { label: "Rejected", variant: "destructive" },
 };
 
+// Helper to check if a string is a valid URL
+const isValidUrl = (str: string | null): boolean => {
+  if (!str) return false;
+  try {
+    new URL(str);
+    return str.startsWith('http://') || str.startsWith('https://');
+  } catch {
+    return false;
+  }
+};
+
 export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: SubscriberDetailsProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -93,14 +104,16 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const [showUploadSection, setShowUploadSection] = useState(false);
   const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
 
-  // Update current proof URL when subscriber changes
+  // Update current proof URL when subscriber changes (only if valid URL)
   if (subscriber && subscriber.payment_proof_url !== currentProofUrl) {
-    setCurrentProofUrl(subscriber.payment_proof_url);
+    setCurrentProofUrl(isValidUrl(subscriber.payment_proof_url) ? subscriber.payment_proof_url : null);
   }
 
   if (!subscriber) return null;
 
   const status = statusConfig[subscriber.status] || { label: subscriber.status, variant: "muted" };
+  const hasValidProofUrl = isValidUrl(currentProofUrl);
+  const hasProofText = !hasValidProofUrl && subscriber.payment_proof_url;
 
   const handleApprove = async () => {
     setIsApproving(true);
@@ -255,7 +268,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                   <CardTitle className="text-sm text-warning">Action Required</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {subscriber.payment_proof_url && (
+                  {hasValidProofUrl && (
                     <Button
                       variant="outline"
                       className="w-full gap-2"
@@ -264,6 +277,12 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                       <ImageIcon className="h-4 w-4" />
                       View Payment Proof
                     </Button>
+                  )}
+                  {hasProofText && (
+                    <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
+                      <p className="font-medium mb-1">Payment Note:</p>
+                      <p>{subscriber.payment_proof_url}</p>
+                    </div>
                   )}
                   <div className="flex gap-2">
                     <Button
@@ -418,10 +437,10 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                       onUpdate();
                     }}
                   />
-                ) : currentProofUrl ? (
+                ) : hasValidProofUrl ? (
                   <div className="space-y-2">
                     <img
-                      src={currentProofUrl}
+                      src={currentProofUrl!}
                       alt="Payment proof"
                       className="w-full max-h-48 object-contain rounded-lg bg-muted/30 cursor-pointer"
                       onClick={() => setShowProofDialog(true)}
@@ -429,6 +448,11 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                     <p className="text-xs text-muted-foreground text-center">
                       Click to view full size
                     </p>
+                  </div>
+                ) : hasProofText ? (
+                  <div className="bg-muted/30 p-4 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Payment Note:</p>
+                    <p className="text-sm text-foreground">{subscriber.payment_proof_url}</p>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
@@ -527,9 +551,9 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
-            {subscriber.payment_proof_url && (
+            {hasValidProofUrl && (
               <img
-                src={subscriber.payment_proof_url}
+                src={currentProofUrl!}
                 alt="Payment proof"
                 className="w-full rounded-lg"
               />
