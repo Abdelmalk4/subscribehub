@@ -456,10 +456,70 @@ async function handlePaymentMethod(
       `💳 <b>Manual Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n📝 <b>Instructions:</b>\n${instructions}\n\nAfter payment, send a screenshot of your payment confirmation here.`
     );
   } else if (method === "stripe") {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      `💳 <b>Card Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n🔗 Stripe integration coming soon! Please use manual payment for now.`
-    );
+    // Get subscriber ID
+    const { data: subscriber } = await supabase
+      .from("subscribers")
+      .select("id")
+      .eq("project_id", project.id)
+      .eq("telegram_user_id", userId)
+      .single();
+
+    if (!subscriber) {
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Subscriber not found. Please try /start again.");
+      return;
+    }
+
+    // Update subscriber status
+    await supabase
+      .from("subscribers")
+      .update({ status: "pending_payment", payment_method: "stripe", updated_at: new Date().toISOString() })
+      .eq("id", subscriber.id);
+
+    // Call create-checkout-session edge function
+    try {
+      const checkoutResponse = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({
+          project_id: project.id,
+          plan_id: planId,
+          subscriber_id: subscriber.id,
+          telegram_user_id: userId,
+        }),
+      });
+
+      const checkoutData = await checkoutResponse.json();
+      console.log("Checkout session response:", JSON.stringify(checkoutData));
+
+      if (checkoutData.checkout_url) {
+        await sendTelegramMessage(
+          project.bot_token,
+          chatId,
+          `💳 <b>Card Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n🔗 Click the button below to complete your payment securely via Stripe:`,
+          {
+            inline_keyboard: [[
+              { text: "💳 Pay Now", url: checkoutData.checkout_url }
+            ]]
+          }
+        );
+      } else {
+        console.error("Failed to create checkout session:", checkoutData);
+        await sendTelegramMessage(
+          project.bot_token,
+          chatId,
+          `❌ Sorry, there was an error setting up the payment. Please try again or use manual payment.`
+        );
+      }
+    } catch (error) {
+      console.error("Error calling checkout session:", error);
+      await sendTelegramMessage(
+        project.bot_token,
+        chatId,
+        `❌ Sorry, there was an error setting up the payment. Please try again or use manual payment.`
+      );
+    }
   }
 }
