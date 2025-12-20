@@ -56,7 +56,7 @@ interface Subscriber {
   telegram_user_id: number;
   username: string | null;
   first_name: string | null;
-  status: "active" | "pending_payment" | "pending_approval" | "awaiting_proof" | "expired" | "rejected";
+  status: "active" | "pending_payment" | "pending_approval" | "awaiting_proof" | "expired" | "rejected" | "suspended";
   plan_id: string | null;
   payment_method: string | null;
   payment_proof_url: string | null;
@@ -66,6 +66,9 @@ interface Subscriber {
   notes: string | null;
   created_at: string | null;
   project_id: string;
+  rejection_reason?: string | null;
+  suspended_at?: string | null;
+  suspended_by?: string | null;
   projects?: { project_name: string } | null;
   plans?: { plan_name: string; price: number; currency: string | null; duration_days: number } | null;
 }
@@ -89,6 +92,7 @@ const statusConfig: Record<string, { label: string; variant: "success" | "warnin
   awaiting_proof: { label: "Awaiting Proof", variant: "pending" },
   expired: { label: "Expired", variant: "muted" },
   rejected: { label: "Rejected", variant: "destructive" },
+  suspended: { label: "Suspended", variant: "destructive" },
 };
 
 const PAGE_SIZES = [25, 50, 100];

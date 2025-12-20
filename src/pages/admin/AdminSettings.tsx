@@ -34,6 +34,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
+import { PaymentMethodsManager } from "@/components/admin/PaymentMethodsManager";
 
 interface SubscriptionPlan {
   id: string;
@@ -204,9 +205,12 @@ export default function AdminSettings() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Platform Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Manage subscription plans and platform configuration
+          Manage payment methods, subscription plans and platform configuration
         </p>
       </div>
+
+      {/* Payment Methods Manager */}
+      <PaymentMethodsManager />
 
       {/* Platform Configuration */}
       <Card variant="glass">

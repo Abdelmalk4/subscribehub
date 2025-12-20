@@ -183,6 +183,42 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_payment_methods: {
+        Row: {
+          created_at: string | null
+          details: Json
+          display_order: number | null
+          id: string
+          instructions: string | null
+          is_active: boolean | null
+          method_name: string
+          method_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json
+          display_order?: number | null
+          id?: string
+          instructions?: string | null
+          is_active?: boolean | null
+          method_name: string
+          method_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json
+          display_order?: number | null
+          id?: string
+          instructions?: string | null
+          is_active?: boolean | null
+          method_name?: string
+          method_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -315,8 +351,11 @@ export type Database = {
           payment_proof_url: string | null
           plan_id: string | null
           project_id: string
+          rejection_reason: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["subscriber_status"]
+          suspended_at: string | null
+          suspended_by: string | null
           telegram_user_id: number
           updated_at: string | null
           username: string | null
@@ -335,8 +374,11 @@ export type Database = {
           payment_proof_url?: string | null
           plan_id?: string | null
           project_id: string
+          rejection_reason?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["subscriber_status"]
+          suspended_at?: string | null
+          suspended_by?: string | null
           telegram_user_id: number
           updated_at?: string | null
           username?: string | null
@@ -355,8 +397,11 @@ export type Database = {
           payment_proof_url?: string | null
           plan_id?: string | null
           project_id?: string
+          rejection_reason?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["subscriber_status"]
+          suspended_at?: string | null
+          suspended_by?: string | null
           telegram_user_id?: number
           updated_at?: string | null
           username?: string | null
@@ -460,6 +505,7 @@ export type Database = {
         | "awaiting_proof"
         | "expired"
         | "rejected"
+        | "suspended"
       subscription_status: "trial" | "active" | "pending_payment" | "expired"
     }
     CompositeTypes: {
@@ -596,6 +642,7 @@ export const Constants = {
         "awaiting_proof",
         "expired",
         "rejected",
+        "suspended",
       ],
       subscription_status: ["trial", "active", "pending_payment", "expired"],
     },
