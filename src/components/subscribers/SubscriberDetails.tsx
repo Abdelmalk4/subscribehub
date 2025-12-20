@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   User,
   Calendar,
@@ -25,6 +26,8 @@ import {
   Loader2,
   Link2,
   Upload,
+  Ban,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,7 +57,7 @@ interface Subscriber {
   telegram_user_id: number;
   username: string | null;
   first_name: string | null;
-  status: "active" | "pending_payment" | "pending_approval" | "awaiting_proof" | "expired" | "rejected";
+  status: "active" | "pending_payment" | "pending_approval" | "awaiting_proof" | "expired" | "rejected" | "suspended";
   plan_id: string | null;
   payment_method: string | null;
   payment_proof_url: string | null;
@@ -64,6 +67,9 @@ interface Subscriber {
   notes: string | null;
   created_at: string | null;
   project_id: string;
+  rejection_reason?: string | null;
+  suspended_at?: string | null;
+  suspended_by?: string | null;
   projects?: { project_name: string } | null;
   plans?: { plan_name: string; price: number; currency: string | null; duration_days: number } | null;
 }
@@ -82,6 +88,7 @@ const statusConfig: Record<string, { label: string; variant: "success" | "warnin
   awaiting_proof: { label: "Awaiting Proof", variant: "pending" },
   expired: { label: "Expired", variant: "muted" },
   rejected: { label: "Rejected", variant: "destructive" },
+  suspended: { label: "Suspended", variant: "destructive" },
 };
 
 // Helper to check if a string is a valid URL
@@ -98,8 +105,13 @@ const isValidUrl = (str: string | null): boolean => {
 export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: SubscriberDetailsProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [extensionDays, setExtensionDays] = useState("30");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [suspendReason, setSuspendReason] = useState("");
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showSuspendDialog, setShowSuspendDialog] = useState(false);
   const [showProofDialog, setShowProofDialog] = useState(false);
   const [showUploadSection, setShowUploadSection] = useState(false);
   const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
@@ -154,18 +166,69 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
     try {
       const { error } = await supabase
         .from("subscribers")
-        .update({ status: "rejected" })
+        .update({ 
+          status: "rejected",
+          rejection_reason: rejectionReason || null,
+        })
         .eq("id", subscriber.id);
 
       if (error) throw error;
 
       toast.success("Subscriber rejected");
+      setShowRejectDialog(false);
+      setRejectionReason("");
       onUpdate();
       onOpenChange(false);
     } catch (error: any) {
       toast.error("Failed to reject", { description: error.message });
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleSuspend = async () => {
+    setIsSuspending(true);
+    try {
+      const { error } = await supabase
+        .from("subscribers")
+        .update({ 
+          status: "suspended",
+          suspended_at: new Date().toISOString(),
+          rejection_reason: suspendReason || null,
+        })
+        .eq("id", subscriber.id);
+
+      if (error) throw error;
+
+      toast.success("Subscriber suspended");
+      setShowSuspendDialog(false);
+      setSuspendReason("");
+      onUpdate();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error("Failed to suspend", { description: error.message });
+    } finally {
+      setIsSuspending(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    try {
+      const { error } = await supabase
+        .from("subscribers")
+        .update({ 
+          status: "active",
+          suspended_at: null,
+          rejection_reason: null,
+        })
+        .eq("id", subscriber.id);
+
+      if (error) throw error;
+
+      toast.success("Subscriber reactivated");
+      onUpdate();
+    } catch (error: any) {
+      toast.error("Failed to reactivate", { description: error.message });
     }
   };
 
@@ -301,17 +364,46 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                     <Button
                       variant="destructive"
                       className="flex-1 gap-2"
-                      onClick={handleReject}
+                      onClick={() => setShowRejectDialog(true)}
                       disabled={isRejecting}
                     >
-                      {isRejecting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <XCircle className="h-4 w-4" />
-                      )}
+                      <XCircle className="h-4 w-4" />
                       Reject
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Suspended/Rejected Status Info */}
+            {(subscriber.status === "suspended" || subscriber.status === "rejected") && (
+              <Card className="border-destructive/30 bg-destructive/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-destructive flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    {subscriber.status === "suspended" ? "Subscriber Suspended" : "Payment Rejected"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {subscriber.rejection_reason && (
+                    <div className="text-sm bg-muted/30 p-3 rounded-lg">
+                      <p className="font-medium text-muted-foreground mb-1">Reason:</p>
+                      <p className="text-foreground">{subscriber.rejection_reason}</p>
+                    </div>
+                  )}
+                  {subscriber.suspended_at && (
+                    <p className="text-xs text-muted-foreground">
+                      Suspended on: {format(new Date(subscriber.suspended_at), "MMM d, yyyy HH:mm")}
+                    </p>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={handleReactivate}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Reactivate Subscriber
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -493,27 +585,65 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
               </div>
 
               {subscriber.status === "active" && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full">
-                      Revoke Access
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Revoke Access?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will immediately expire the subscription. The user will lose access to the channel.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleRevoke} className="bg-destructive">
+                <div className="flex gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" className="flex-1 gap-2">
+                        <Ban className="h-4 w-4" />
+                        Suspend
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Suspend Subscriber?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will immediately suspend the subscriber's access. They will be notified via bot.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="py-4">
+                        <Label className="text-sm">Reason (optional)</Label>
+                        <Textarea
+                          value={suspendReason}
+                          onChange={(e) => setSuspendReason(e.target.value)}
+                          placeholder="Reason for suspension..."
+                          className="mt-2"
+                        />
+                      </div>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={handleSuspend} 
+                          className="bg-destructive"
+                          disabled={isSuspending}
+                        >
+                          {isSuspending ? "Suspending..." : "Suspend"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" className="flex-1">
                         Revoke
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Revoke Access?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will immediately expire the subscription. The user will lose access to the channel.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleRevoke} className="bg-destructive">
+                          Revoke
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               )}
 
               {subscriber.username && (
@@ -558,6 +688,40 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 className="w-full rounded-lg"
               />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Payment</DialogTitle>
+            <DialogDescription>
+              Provide a reason for rejecting this payment (will be shown to user via bot).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>Rejection Reason</Label>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g., Payment proof unclear, amount mismatch..."
+              className="mt-2"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleReject}
+              disabled={isRejecting}
+            >
+              {isRejecting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Reject Payment
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
