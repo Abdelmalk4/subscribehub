@@ -26,8 +26,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { project_id, plan_id, subscriber_id, telegram_user_id }: CreateCheckoutRequest = await req.json();
 
-    // Log only that we're creating a session, not the actual IDs
-    console.log("Creating checkout session");
+    console.log("Creating checkout session for:", { project_id, plan_id, subscriber_id, telegram_user_id });
 
     // Validate required fields
     if (!project_id || !plan_id || !subscriber_id || !telegram_user_id) {
@@ -45,7 +44,7 @@ serve(async (req) => {
       .single();
 
     if (planError || !plan) {
-      console.error("Plan not found");
+      console.error("Plan not found:", planError);
       return new Response(JSON.stringify({ error: "Plan not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -60,7 +59,7 @@ serve(async (req) => {
       .single();
 
     if (projectError || !project) {
-      console.error("Project not found");
+      console.error("Project not found:", projectError);
       return new Response(JSON.stringify({ error: "Project not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -96,16 +95,16 @@ serve(async (req) => {
     });
 
     if (!stripeResponse.ok) {
-      console.error("Stripe API error");
-      return new Response(JSON.stringify({ error: "Failed to create checkout session" }), {
+      const errorData = await stripeResponse.text();
+      console.error("Stripe API error:", errorData);
+      return new Response(JSON.stringify({ error: "Failed to create checkout session", details: errorData }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const session = await stripeResponse.json();
-    // Log only that session was created, not the session ID
-    console.log("Checkout session created successfully");
+    console.log("Checkout session created:", session.id);
 
     return new Response(JSON.stringify({ 
       checkout_url: session.url,
@@ -114,8 +113,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error creating checkout session");
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    console.error("Error creating checkout session:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

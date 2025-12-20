@@ -9,9 +9,6 @@ verify_jwt = false
 [functions.check-expiring-subscriptions]
 verify_jwt = false
 
-[functions.check-client-subscriptions]
-verify_jwt = false
-
 [functions.stripe-webhook]
 verify_jwt = false
 

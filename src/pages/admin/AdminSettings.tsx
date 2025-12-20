@@ -30,10 +30,6 @@ import {
   Edit,
   Trash2,
   Save,
-  Loader2,
-  Building,
-  Wallet,
-  Bitcoin,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -56,7 +52,6 @@ export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
   const [isNewPlan, setIsNewPlan] = useState(false);
-  const [savingPayment, setSavingPayment] = useState(false);
 
   // Platform settings
   const [platformSettings, setPlatformSettings] = useState({
@@ -66,23 +61,9 @@ export default function AdminSettings() {
     supportEmail: "support@subscribehub.com",
   });
 
-  // Payment settings
-  const [paymentSettings, setPaymentSettings] = useState({
-    bankName: "",
-    accountName: "",
-    accountNumber: "",
-    routingNumber: "",
-    swiftCode: "",
-    paypalEmail: "",
-    cryptoAddress: "",
-    cryptoNetwork: "",
-    paymentInstructions: "",
-  });
-
   useEffect(() => {
     fetchPlans();
     fetchPlatformSettings();
-    fetchPaymentSettings();
   }, []);
 
   const fetchPlans = async () => {
@@ -117,47 +98,6 @@ export default function AdminSettings() {
         supportEmail: (settingsMap.support_email as string) ?? prev.supportEmail,
       }));
     }
-  };
-
-  const fetchPaymentSettings = async () => {
-    const { data } = await supabase
-      .from("platform_config")
-      .select("*")
-      .eq("key", "payment_addresses")
-      .maybeSingle();
-
-    if (data?.value) {
-      const paymentData = data.value as Record<string, string>;
-      setPaymentSettings({
-        bankName: paymentData.bankName || "",
-        accountName: paymentData.accountName || "",
-        accountNumber: paymentData.accountNumber || "",
-        routingNumber: paymentData.routingNumber || "",
-        swiftCode: paymentData.swiftCode || "",
-        paypalEmail: paymentData.paypalEmail || "",
-        cryptoAddress: paymentData.cryptoAddress || "",
-        cryptoNetwork: paymentData.cryptoNetwork || "",
-        paymentInstructions: paymentData.paymentInstructions || "",
-      });
-    }
-  };
-
-  const savePaymentSettings = async () => {
-    setSavingPayment(true);
-    const { error } = await supabase
-      .from("platform_config")
-      .upsert(
-        { key: "payment_addresses", value: paymentSettings as unknown as Json, updated_at: new Date().toISOString() },
-        { onConflict: "key" }
-      );
-
-    if (error) {
-      toast.error("Failed to save payment settings");
-      console.error(error);
-    } else {
-      toast.success("Payment settings saved");
-    }
-    setSavingPayment(false);
   };
 
   const savePlatformSetting = async (key: string, value: Json) => {
@@ -348,143 +288,6 @@ export default function AdminSettings() {
                 }
               />
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Payment Addresses */}
-      <Card variant="glass">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" />
-              <CardTitle>Payment Addresses</CardTitle>
-            </div>
-            <Button onClick={savePaymentSettings} disabled={savingPayment}>
-              {savingPayment ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save
-            </Button>
-          </div>
-          <CardDescription>Configure payment methods for client subscriptions</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Bank Transfer */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Building className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-foreground font-medium">Bank Transfer</Label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
-              <div className="space-y-2">
-                <Label htmlFor="bankName">Bank Name</Label>
-                <Input
-                  id="bankName"
-                  value={paymentSettings.bankName}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, bankName: e.target.value }))}
-                  placeholder="e.g., Chase Bank"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="accountName">Account Name</Label>
-                <Input
-                  id="accountName"
-                  value={paymentSettings.accountName}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, accountName: e.target.value }))}
-                  placeholder="e.g., Your Company Inc."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="accountNumber">Account Number</Label>
-                <Input
-                  id="accountNumber"
-                  value={paymentSettings.accountNumber}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, accountNumber: e.target.value }))}
-                  placeholder="e.g., 1234567890"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="routingNumber">Routing Number</Label>
-                <Input
-                  id="routingNumber"
-                  value={paymentSettings.routingNumber}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, routingNumber: e.target.value }))}
-                  placeholder="e.g., 021000021"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="swiftCode">SWIFT/BIC Code</Label>
-                <Input
-                  id="swiftCode"
-                  value={paymentSettings.swiftCode}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, swiftCode: e.target.value }))}
-                  placeholder="e.g., CHASUS33"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* PayPal */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-foreground font-medium">PayPal</Label>
-            </div>
-            <div className="pl-6">
-              <div className="space-y-2 max-w-md">
-                <Label htmlFor="paypalEmail">PayPal Email</Label>
-                <Input
-                  id="paypalEmail"
-                  type="email"
-                  value={paymentSettings.paypalEmail}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, paypalEmail: e.target.value }))}
-                  placeholder="e.g., payments@yourcompany.com"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Crypto */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Bitcoin className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-foreground font-medium">Cryptocurrency</Label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
-              <div className="space-y-2">
-                <Label htmlFor="cryptoNetwork">Network</Label>
-                <Input
-                  id="cryptoNetwork"
-                  value={paymentSettings.cryptoNetwork}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, cryptoNetwork: e.target.value }))}
-                  placeholder="e.g., USDT (TRC20)"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cryptoAddress">Wallet Address</Label>
-                <Input
-                  id="cryptoAddress"
-                  value={paymentSettings.cryptoAddress}
-                  onChange={(e) => setPaymentSettings(prev => ({ ...prev, cryptoAddress: e.target.value }))}
-                  placeholder="e.g., TXyz..."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Instructions */}
-          <div className="space-y-2">
-            <Label htmlFor="paymentInstructions">Payment Instructions</Label>
-            <Textarea
-              id="paymentInstructions"
-              value={paymentSettings.paymentInstructions}
-              onChange={(e) => setPaymentSettings(prev => ({ ...prev, paymentInstructions: e.target.value }))}
-              placeholder="Add any additional payment instructions for clients..."
-              rows={3}
-            />
           </div>
         </CardContent>
       </Card>

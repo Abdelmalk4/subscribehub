@@ -43,7 +43,7 @@ async function verifyStripeSignature(payload: string, signature: string, secret:
     
     return expectedSignature === v1Signature;
   } catch (error) {
-    console.error("Signature verification error");
+    console.error("Signature verification error:", error);
     return false;
   }
 }
@@ -77,15 +77,14 @@ async function createInviteLink(botToken: string, channelId: string, subscriberN
       }),
     });
     const result = await response.json();
-    // Log only success/failure, not the invite link itself
-    console.log("Create invite link result", { success: result.ok });
+    console.log("Create invite link result:", JSON.stringify(result));
     
     if (result.ok) {
       return result.result.invite_link;
     }
     return null;
   } catch (error) {
-    console.error("Error creating invite link");
+    console.error("Error creating invite link:", error);
     return null;
   }
 }
@@ -122,11 +121,7 @@ serve(async (req) => {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-      // Log only non-sensitive metadata
-      console.log("Checkout session completed", { 
-        has_subscriber: !!session.client_reference_id,
-        has_metadata: !!session.metadata 
-      });
+      console.log("Checkout session completed:", JSON.stringify(session));
 
       const subscriberId = session.client_reference_id;
       const metadata = session.metadata || {};
@@ -150,14 +145,14 @@ serve(async (req) => {
         .single();
 
       if (subError || !subscriber) {
-        console.error("Subscriber not found");
+        console.error("Subscriber not found:", subError);
         return new Response(JSON.stringify({ error: "Subscriber not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      console.log("Found subscriber");
+      console.log("Found subscriber:", subscriber.id);
 
       // Fetch project
       const { data: project, error: projError } = await supabase
@@ -167,7 +162,7 @@ serve(async (req) => {
         .single();
 
       if (projError || !project) {
-        console.error("Project not found");
+        console.error("Project not found:", projError);
         return new Response(JSON.stringify({ error: "Project not found" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -202,7 +197,7 @@ serve(async (req) => {
         .eq("id", subscriberId);
 
       if (updateError) {
-        console.error("Error updating subscriber");
+        console.error("Error updating subscriber:", updateError);
       } else {
         console.log("Subscriber updated to active");
       }
@@ -230,8 +225,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error processing Stripe webhook");
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    console.error("Error processing Stripe webhook:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

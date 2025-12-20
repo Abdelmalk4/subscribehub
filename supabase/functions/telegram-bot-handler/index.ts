@@ -49,36 +49,22 @@ function verifyWebhookAuth(req: Request, botToken: string): boolean {
   }
   
   // The secret token should match what was set in setWebhook
-  // We use a cryptographic hash of the bot token as the secret for verification
+  // We use a hash of the bot token as the secret for verification
   const expectedToken = generateWebhookSecret(botToken);
   return providedToken === expectedToken;
 }
 
-// Generate a cryptographic webhook secret from bot token (deterministic)
-async function generateWebhookSecretAsync(botToken: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(botToken);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return 'wh_' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32);
-}
-
-// Synchronous version using pre-computed or simple derivation for verification
-// Note: For proper async handling, use generateWebhookSecretAsync
+// Generate a webhook secret from bot token (deterministic)
 function generateWebhookSecret(botToken: string): string {
-  // Use a more secure derivation - base64 of simple hash for backwards compatibility
-  // This is still deterministic but harder to predict than the previous implementation
-  let hash = 5381; // djb2 initial value
+  // Simple hash-like secret generation from bot token
+  // This creates a consistent secret that can be used when setting up the webhook
+  let hash = 0;
   for (let i = 0; i < botToken.length; i++) {
-    hash = ((hash << 5) + hash) ^ botToken.charCodeAt(i);
+    const char = botToken.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
   }
-  // Use more entropy by incorporating multiple passes
-  for (let i = 0; i < botToken.length; i++) {
-    hash = ((hash << 13) - hash) + botToken.charCodeAt(botToken.length - 1 - i);
-    hash = hash & hash;
-  }
-  const hex = Math.abs(hash).toString(16).padStart(8, '0');
-  return `wh_${hex}${botToken.length.toString(16).padStart(4, '0')}`;
+  return `wh_${Math.abs(hash).toString(36)}`;
 }
 
 interface TelegramUpdate {
@@ -194,7 +180,7 @@ serve(async (req) => {
       .single();
 
     if (projectError || !project) {
-      console.error("Project not found");
+      console.error("Project not found:", projectError);
       return new Response(JSON.stringify({ error: "Project not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -214,12 +200,7 @@ serve(async (req) => {
     }
 
     const update: TelegramUpdate = await req.json();
-    // Log only non-sensitive metadata
-    console.log("Received Telegram update", {
-      type: update.callback_query ? 'callback_query' : update.message ? 'message' : 'other',
-      update_id: update.update_id,
-      has_text: !!update.message?.text,
-    });
+    console.log("Received update:", JSON.stringify(update));
 
     // Handle callback queries (button clicks)
     if (update.callback_query) {
@@ -237,7 +218,7 @@ serve(async (req) => {
         
         // Validate planId is a valid UUID
         if (!isValidUUID(planId)) {
-          console.error("Invalid plan ID format in callback");
+          console.error("Invalid plan ID format in callback:", planId);
           await sendTelegramMessage(botToken, chatId, "❌ Invalid plan selection. Please try /start again.");
           return new Response(JSON.stringify({ ok: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -259,7 +240,7 @@ serve(async (req) => {
         
         // Validate planId is a valid UUID
         if (!isValidUUID(planId)) {
-          console.error("Invalid plan ID format in payment method");
+          console.error("Invalid plan ID format in payment method:", planId);
           await sendTelegramMessage(botToken, chatId, "❌ Invalid plan selection. Please try /start again.");
           return new Response(JSON.stringify({ ok: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -268,7 +249,7 @@ serve(async (req) => {
         
         // Validate payment method
         if (!["manual", "stripe"].includes(method)) {
-          console.error("Invalid payment method");
+          console.error("Invalid payment method:", method);
           await sendTelegramMessage(botToken, chatId, "❌ Invalid payment method. Please try again.");
           return new Response(JSON.stringify({ ok: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -347,7 +328,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error processing webhook");
+    console.error("Error processing webhook:", error);
     // Return generic error to avoid information leakage
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
@@ -628,8 +609,7 @@ async function handlePaymentMethod(
       });
 
       const checkoutData = await checkoutResponse.json();
-      // Log only success/failure status, not the actual URL
-      console.log("Checkout session created", { success: !!checkoutData.checkout_url });
+      console.log("Checkout session response:", JSON.stringify(checkoutData));
 
       if (checkoutData.checkout_url) {
         await sendTelegramMessage(
@@ -643,7 +623,7 @@ async function handlePaymentMethod(
           }
         );
       } else {
-        console.error("Failed to create checkout session");
+        console.error("Failed to create checkout session:", checkoutData);
         await sendTelegramMessage(
           project.bot_token,
           chatId,
@@ -651,7 +631,7 @@ async function handlePaymentMethod(
         );
       }
     } catch (error) {
-      console.error("Error calling checkout session");
+      console.error("Error calling checkout session:", error);
       await sendTelegramMessage(
         project.bot_token,
         chatId,

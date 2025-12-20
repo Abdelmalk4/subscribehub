@@ -10,22 +10,15 @@ interface SetupWebhookRequest {
   project_id: string;
 }
 
-// Generate a cryptographic webhook secret from bot token (deterministic)
-// Must match the implementation in telegram-bot-handler
+// Generate a webhook secret from bot token (must match telegram-bot-handler)
 function generateWebhookSecret(botToken: string): string {
-  // Use a more secure derivation - base64 of simple hash for backwards compatibility
-  // This is still deterministic but harder to predict than the previous implementation
-  let hash = 5381; // djb2 initial value
+  let hash = 0;
   for (let i = 0; i < botToken.length; i++) {
-    hash = ((hash << 5) + hash) ^ botToken.charCodeAt(i);
-  }
-  // Use more entropy by incorporating multiple passes
-  for (let i = 0; i < botToken.length; i++) {
-    hash = ((hash << 13) - hash) + botToken.charCodeAt(botToken.length - 1 - i);
+    const char = botToken.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
-  const hex = Math.abs(hash).toString(16).padStart(8, '0');
-  return `wh_${hex}${botToken.length.toString(16).padStart(4, '0')}`;
+  return `wh_${Math.abs(hash).toString(36)}`;
 }
 
 serve(async (req) => {
@@ -52,7 +45,7 @@ serve(async (req) => {
     // Generate the secret token for webhook authentication
     const secretToken = generateWebhookSecret(bot_token);
 
-    console.log("Setting up webhook for project", { project_id });
+    console.log(`Setting up webhook for project ${project_id} to URL: ${webhookUrl}`);
 
     // Call Telegram API to set the webhook with secret_token for authentication
     const telegramResponse = await fetch(
@@ -70,11 +63,10 @@ serve(async (req) => {
     );
 
     const telegramResult = await telegramResponse.json();
-    // Log only success/failure, not the full response
-    console.log("Telegram setWebhook result", { ok: telegramResult.ok });
+    console.log("Telegram setWebhook response:", JSON.stringify(telegramResult));
 
     if (!telegramResult.ok) {
-      console.error("Failed to set webhook");
+      console.error("Failed to set webhook:", telegramResult.description);
       return new Response(
         JSON.stringify({
           success: false,
@@ -89,8 +81,7 @@ serve(async (req) => {
       `https://api.telegram.org/bot${bot_token}/getWebhookInfo`
     );
     const webhookInfo = await webhookInfoResponse.json();
-    // Log only that we got webhook info, not the contents
-    console.log("Webhook info retrieved", { has_url: !!webhookInfo.result?.url });
+    console.log("Webhook info:", JSON.stringify(webhookInfo));
 
     return new Response(
       JSON.stringify({
@@ -102,7 +93,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error setting up webhook");
+    console.error("Error setting up webhook:", error);
     // Return generic error to avoid information leakage
     return new Response(
       JSON.stringify({ success: false, error: "Failed to configure webhook" }),
