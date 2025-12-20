@@ -2,6 +2,7 @@ import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import PageTransition from "@/components/PageTransition";
@@ -13,6 +14,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   const { user, loading } = useAuth();
+  const { role, loading: roleLoading } = useUserRole();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const location = useLocation();
 
@@ -20,7 +22,7 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
   const unprotectedPaths = ['/billing', '/settings'];
   const shouldShowGuard = !isAdmin && !unprotectedPaths.includes(location.pathname);
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -30,6 +32,12 @@ export function DashboardLayout({ isAdmin = false }: DashboardLayoutProps) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Server-verified admin route protection
+  // If this is an admin route, verify the user has super_admin role from database
+  if (isAdmin && role !== "super_admin") {
+    return <Navigate to="/dashboard" replace />;
   }
 
   const content = (
