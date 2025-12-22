@@ -72,17 +72,24 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
     return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
   };
 
+  const handleNavClick = () => {
+    // Collapse sidebar when clicking a nav link
+    onCollapsedChange?.(true);
+  };
+
   return (
     <aside
       className={cn(
         "sticky top-0 z-30 h-screen transition-all duration-300 shrink-0",
         collapsed ? "w-20" : "w-64"
       )}
+      onMouseEnter={() => onCollapsedChange?.(false)}
+      onMouseLeave={() => onCollapsedChange?.(true)}
     >
       <div className="h-full m-3 flex flex-col bg-card/40 backdrop-blur-2xl border border-border/30 rounded-2xl shadow-2xl overflow-hidden">
         {/* Logo Section */}
         <div className="p-4 border-b border-border/30">
-          <Link to="/dashboard" className="flex items-center gap-3">
+          <Link to="/dashboard" className="flex items-center gap-3" onClick={handleNavClick}>
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm">
               <Zap className="h-5 w-5 text-primary-foreground" />
             </div>
@@ -105,6 +112,7 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
               <Link
                 key={item.href}
                 to={item.href}
+                onClick={handleNavClick}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
                   isActive
@@ -153,19 +161,6 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
             {!collapsed && <span className="ml-2">Sign Out</span>}
           </Button>
         </div>
-
-        {/* Collapse Toggle */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => onCollapsedChange?.(!collapsed)}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-card border border-border shadow-md"
-        >
-          <ChevronLeft className={cn(
-            "h-3 w-3 transition-transform duration-200",
-            collapsed && "rotate-180"
-          )} />
-        </Button>
       </div>
     </aside>
   );
