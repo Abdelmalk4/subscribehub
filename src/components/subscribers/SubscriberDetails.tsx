@@ -127,14 +127,55 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const hasValidProofUrl = isValidUrl(currentProofUrl);
   const hasProofText = !hasValidProofUrl && subscriber.payment_proof_url;
 
+  // Helper to notify subscriber via bot
+  const notifySubscriber = async (
+    action: "approved" | "rejected" | "suspended" | "kicked" | "reactivated",
+    options?: { reason?: string; expiry_date?: string }
+  ) => {
+    try {
+      const { error } = await supabase.functions.invoke("notify-subscriber", {
+        body: {
+          subscriber_id: subscriber.id,
+          action,
+          reason: options?.reason,
+          expiry_date: options?.expiry_date,
+        },
+      });
+      if (error) {
+        console.error("Failed to notify subscriber:", error);
+      }
+    } catch (err) {
+      console.error("Error calling notify-subscriber:", err);
+    }
+  };
+
   const handleApprove = async () => {
     setIsApproving(true);
     try {
       const plan = subscriber.plans;
       const durationDays = plan?.duration_days || 30;
-      const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + durationDays);
+      
+      // For renewals: if subscriber is active with future expiry, extend from current expiry
+      // Otherwise start from today
+      let startDate = new Date();
+      let expiryDate: Date;
+      
+      if (subscriber.status === "active" && subscriber.expiry_date) {
+        const currentExpiry = new Date(subscriber.expiry_date);
+        if (currentExpiry > new Date()) {
+          // Active with future expiry - extend from current expiry
+          expiryDate = new Date(currentExpiry);
+          expiryDate.setDate(expiryDate.getDate() + durationDays);
+        } else {
+          // Expired - start fresh from today
+          expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + durationDays);
+        }
+      } else {
+        // New subscription or other status - start from today
+        expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
+      }
 
       const { error } = await supabase
         .from("subscribers")
@@ -144,13 +185,18 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
           expiry_date: expiryDate.toISOString(),
           expiry_reminder_sent: false,
           final_reminder_sent: false,
+          rejection_reason: null,
+          suspended_at: null,
         })
         .eq("id", subscriber.id);
 
       if (error) throw error;
 
+      // Notify subscriber with invite link
+      await notifySubscriber("approved", { expiry_date: expiryDate.toISOString() });
+
       toast.success("Subscriber approved!", {
-        description: `Subscription active until ${format(expiryDate, "MMM d, yyyy")}`,
+        description: `Subscription active until ${format(expiryDate, "MMM d, yyyy")}. Invite link sent via bot.`,
       });
       onUpdate();
       onOpenChange(false);
@@ -174,7 +220,10 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
-      toast.success("Subscriber rejected");
+      // Notify subscriber via bot
+      await notifySubscriber("rejected", { reason: rejectionReason });
+
+      toast.success("Subscriber rejected and notified via bot");
       setShowRejectDialog(false);
       setRejectionReason("");
       onUpdate();
@@ -200,7 +249,10 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
-      toast.success("Subscriber suspended");
+      // Notify subscriber and kick from channel
+      await notifySubscriber("suspended", { reason: suspendReason });
+
+      toast.success("Subscriber suspended and removed from channel");
       setShowSuspendDialog(false);
       setSuspendReason("");
       onUpdate();
@@ -225,7 +277,10 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
-      toast.success("Subscriber reactivated");
+      // Notify subscriber with new invite link
+      await notifySubscriber("reactivated");
+
+      toast.success("Subscriber reactivated and invite link sent");
       onUpdate();
     } catch (error: any) {
       toast.error("Failed to reactivate", { description: error.message });
@@ -241,8 +296,17 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
     setIsExtending(true);
     try {
-      const currentExpiry = subscriber.expiry_date ? new Date(subscriber.expiry_date) : new Date();
-      const newExpiry = new Date(Math.max(currentExpiry.getTime(), Date.now()));
+      // Always extend from current expiry if it exists and is in the future
+      // Otherwise extend from today
+      let baseDate: Date;
+      if (subscriber.expiry_date) {
+        const currentExpiry = new Date(subscriber.expiry_date);
+        baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+      } else {
+        baseDate = new Date();
+      }
+      
+      const newExpiry = new Date(baseDate);
       newExpiry.setDate(newExpiry.getDate() + days);
 
       const { error } = await supabase
@@ -277,7 +341,10 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
-      toast.success("Access revoked");
+      // Kick from channel
+      await notifySubscriber("kicked", { reason: "Subscription revoked by admin" });
+
+      toast.success("Access revoked and user removed from channel");
       onUpdate();
       onOpenChange(false);
     } catch (error: any) {
