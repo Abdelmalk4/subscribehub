@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -117,9 +117,12 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
 
   // Update current proof URL when subscriber changes (only if valid URL)
-  if (subscriber && subscriber.payment_proof_url !== currentProofUrl) {
-    setCurrentProofUrl(isValidUrl(subscriber.payment_proof_url) ? subscriber.payment_proof_url : null);
-  }
+  useEffect(() => {
+    if (subscriber) {
+      const validUrl = isValidUrl(subscriber.payment_proof_url) ? subscriber.payment_proof_url : null;
+      setCurrentProofUrl(validUrl);
+    }
+  }, [subscriber?.id, subscriber?.payment_proof_url]);
 
   if (!subscriber) return null;
 
