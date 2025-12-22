@@ -25,14 +25,12 @@ import {
   ImageIcon,
   Loader2,
   Link2,
-  Upload,
   Ban,
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { PaymentProofUpload } from "./PaymentProofUpload";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -113,7 +111,6 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showSuspendDialog, setShowSuspendDialog] = useState(false);
   const [showProofDialog, setShowProofDialog] = useState(false);
-  const [showUploadSection, setShowUploadSection] = useState(false);
   const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
 
   // Update current proof URL when subscriber changes (only if valid URL)
@@ -567,39 +564,16 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
               </Card>
             )}
 
-            {/* Payment Proof Upload Section */}
+            {/* Payment Proof Section */}
             <Card variant="glass">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4" />
-                    Payment Proof
-                  </CardTitle>
-                  {!showUploadSection && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowUploadSection(true)}
-                    >
-                      <Upload className="h-4 w-4 mr-1" />
-                      Upload
-                    </Button>
-                  )}
-                </div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Payment Proof
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {showUploadSection ? (
-                  <PaymentProofUpload
-                    projectId={subscriber.project_id}
-                    subscriberId={subscriber.id}
-                    currentProofUrl={currentProofUrl}
-                    onUploadComplete={(url) => {
-                      setCurrentProofUrl(url);
-                      setShowUploadSection(false);
-                      onUpdate();
-                    }}
-                  />
-                ) : hasValidProofUrl ? (
+                {hasValidProofUrl ? (
                   <div className="space-y-2">
                     <img
                       src={currentProofUrl!}
@@ -618,7 +592,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No payment proof uploaded
+                    No payment proof submitted
                   </p>
                 )}
               </CardContent>
