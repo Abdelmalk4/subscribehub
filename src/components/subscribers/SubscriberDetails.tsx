@@ -391,8 +391,8 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
               )}
             </div>
 
-            {/* Quick Actions for Pending */}
-            {(subscriber.status === "pending_approval" || subscriber.status === "awaiting_proof") && (
+            {/* Quick Actions for Pending Approval Only */}
+            {subscriber.status === "pending_approval" && (
               <Card className="border-warning/30 bg-warning/5">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-warning">Action Required</CardTitle>
@@ -602,31 +602,34 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
             {/* Actions */}
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm">Extend Subscription</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    value={extensionDays}
-                    onChange={(e) => setExtensionDays(e.target.value)}
-                    placeholder="Days"
-                    className="w-24"
-                  />
-                  <Button
-                    variant="outline"
-                    className="flex-1 gap-2"
-                    onClick={handleExtend}
-                    disabled={isExtending}
-                  >
-                    {isExtending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Clock className="h-4 w-4" />
-                    )}
-                    Extend
-                  </Button>
+              {/* Extend - Only for active subscribers */}
+              {subscriber.status === "active" && (
+                <div className="space-y-2">
+                  <Label className="text-sm">Extend Subscription</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={extensionDays}
+                      onChange={(e) => setExtensionDays(e.target.value)}
+                      placeholder="Days"
+                      className="w-24"
+                    />
+                    <Button
+                      variant="outline"
+                      className="flex-1 gap-2"
+                      onClick={handleExtend}
+                      disabled={isExtending}
+                    >
+                      {isExtending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Clock className="h-4 w-4" />
+                      )}
+                      Extend
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {subscriber.status === "active" && (
                 <div className="flex gap-2">

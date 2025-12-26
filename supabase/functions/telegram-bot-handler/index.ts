@@ -461,6 +461,16 @@ async function handleRenew(supabase: any, project: Project, userId: number, chat
 
   const sub = subscriber as Subscriber | null;
 
+  // Extend/renew is only available for active subscribers
+  if (!sub || sub.status !== "active") {
+    await sendTelegramMessage(
+      project.bot_token,
+      chatId,
+      "❌ You don't have an active subscription to extend.\n\nUse /start to subscribe to a plan!"
+    );
+    return;
+  }
+
   const { data: plans } = await supabase
     .from("plans")
     .select("*")
@@ -480,11 +490,11 @@ async function handleRenew(supabase: any, project: Project, userId: number, chat
     callback_data: `select_plan:${plan.id}`,
   }]);
 
-  let message = `🔄 <b>Renew Your Subscription</b>\n\n`;
-  if (sub?.status === "active" && sub.expiry_date) {
+  let message = `🔄 <b>Extend Your Subscription</b>\n\n`;
+  if (sub.expiry_date) {
     message += `Current subscription expires on ${new Date(sub.expiry_date).toLocaleDateString()}.\n\n`;
   }
-  message += `Choose a plan to ${sub?.status === "active" ? "extend" : "reactivate"} your subscription:`;
+  message += `Choose a plan to extend your subscription:`;
 
   await sendTelegramMessage(project.bot_token, chatId, message, { inline_keyboard: keyboard });
 }
