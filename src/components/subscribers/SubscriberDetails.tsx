@@ -129,8 +129,8 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
   // Helper to notify subscriber via bot
   const notifySubscriber = async (
-    action: "approved" | "rejected" | "suspended" | "kicked" | "reactivated",
-    options?: { reason?: string; expiry_date?: string }
+    action: "approved" | "rejected" | "suspended" | "kicked" | "reactivated" | "extended",
+    options?: { reason?: string; expiry_date?: string; days_remaining?: number }
   ) => {
     try {
       const { error } = await supabase.functions.invoke("notify-subscriber", {
@@ -139,10 +139,12 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
           action,
           reason: options?.reason,
           expiry_date: options?.expiry_date,
+          days_remaining: options?.days_remaining,
         },
       });
       if (error) {
         console.error("Failed to notify subscriber:", error);
+        toast.error("Failed to send notification to subscriber");
       }
     } catch (err) {
       console.error("Error calling notify-subscriber:", err);
@@ -321,8 +323,11 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
+      // Notify subscriber about the extension
+      await notifySubscriber("extended", { expiry_date: newExpiry.toISOString() });
+
       toast.success("Subscription extended!", {
-        description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}`,
+        description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}. Subscriber notified.`,
       });
       onUpdate();
     } catch (error: any) {
