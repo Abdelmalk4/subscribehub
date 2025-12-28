@@ -344,7 +344,32 @@ export default function Subscribers() {
         return;
       }
 
-      toast.success("Subscriber approved!");
+      // Send notification with invite link via edge function
+      try {
+        const { data: notifyData, error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
+          body: {
+            subscriber_id: subscriber.id,
+            action: "approved",
+            expiry_date: expiryDate.toISOString(),
+          },
+        });
+
+        if (notifyError) {
+          console.error("Notification error:", notifyError);
+          toast.warning("Approved but notification failed", { 
+            description: "Subscriber approved but could not send Telegram notification." 
+          });
+        } else {
+          console.log("Notification sent:", notifyData);
+          toast.success("Subscriber approved and notified!");
+        }
+      } catch (notifyErr: any) {
+        console.error("Notification exception:", notifyErr);
+        toast.warning("Approved but notification failed", { 
+          description: notifyErr.message 
+        });
+      }
+
       fetchSubscribers();
       fetchStats();
     } catch (error: any) {
@@ -376,7 +401,30 @@ export default function Subscribers() {
         return;
       }
 
-      toast.success("Subscriber rejected");
+      // Send rejection notification via edge function
+      try {
+        const { error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
+          body: {
+            subscriber_id: subscriber.id,
+            action: "rejected",
+          },
+        });
+
+        if (notifyError) {
+          console.error("Notification error:", notifyError);
+          toast.warning("Rejected but notification failed", { 
+            description: "Subscriber rejected but could not send Telegram notification." 
+          });
+        } else {
+          toast.success("Subscriber rejected and notified");
+        }
+      } catch (notifyErr: any) {
+        console.error("Notification exception:", notifyErr);
+        toast.warning("Rejected but notification failed", { 
+          description: notifyErr.message 
+        });
+      }
+
       fetchSubscribers();
       fetchStats();
     } catch (error: any) {

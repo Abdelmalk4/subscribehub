@@ -189,20 +189,27 @@ async function verifyAuth(req: Request, supabase: any): Promise<{ valid: boolean
 
 // ============= MAIN HANDLER =============
 serve(async (req) => {
+  console.log("[NOTIFY] Incoming request:", req.method, req.url);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const requestId = crypto.randomUUID().slice(0, 8);
-  console.log(`[${requestId}] Notify subscriber request`);
+  console.log(`[${requestId}] ========== NOTIFY SUBSCRIBER START ==========`);
+  console.log(`[${requestId}] Method: ${req.method}`);
+  console.log(`[${requestId}] Headers present: authorization=${!!req.headers.get("authorization")}, content-type=${req.headers.get("content-type")}`);
 
   try {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log(`[${requestId}] Supabase client created`);
     
     // Verify authentication
     const authResult = await verifyAuth(req, supabase);
+    console.log(`[${requestId}] Auth result: valid=${authResult.valid}, userId=${authResult.userId || 'N/A'}`);
+    
     if (!authResult.valid) {
-      console.error(`[${requestId}] Unauthorized request`);
+      console.error(`[${requestId}] UNAUTHORIZED - No valid auth token`);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -210,19 +217,22 @@ serve(async (req) => {
     }
 
     const body: NotifyRequest = await req.json();
+    console.log(`[${requestId}] Request body:`, JSON.stringify(body));
     
     const { subscriber_id, action, reason, invite_link, expiry_date, days_remaining } = body;
     
     if (!subscriber_id || !action) {
+      console.error(`[${requestId}] Missing fields - subscriber_id: ${!!subscriber_id}, action: ${!!action}`);
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[${requestId}] Action: ${action} for subscriber: ${subscriber_id}`);
+    console.log(`[${requestId}] Processing action: ${action} for subscriber: ${subscriber_id}`);
 
     // Fetch subscriber with project details
+    console.log(`[${requestId}] Fetching subscriber from database...`);
     const { data: subscriber, error: subError } = await supabase
       .from("subscribers")
       .select(`
@@ -240,12 +250,15 @@ serve(async (req) => {
       .single();
 
     if (subError || !subscriber) {
-      console.error(`[${requestId}] Subscriber not found:`, subError);
+      console.error(`[${requestId}] Subscriber not found - Error:`, subError?.message);
       return new Response(JSON.stringify({ error: "Subscriber not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    console.log(`[${requestId}] Found subscriber: telegram_id=${subscriber.telegram_user_id}, username=${subscriber.username}`);
+    console.log(`[${requestId}] Project: ${subscriber.projects.project_name}, Channel: ${subscriber.projects.channel_id}`);
 
     // Validate ownership: ensure the authenticated user owns this project
     // Skip ownership check for service key (internal calls)
@@ -409,9 +422,18 @@ serve(async (req) => {
     }
 
     // Send the notification
+    console.log(`[${requestId}] Sending Telegram message to chat_id: ${chatId}`);
+    console.log(`[${requestId}] Message preview: ${message.substring(0, 100)}...`);
+    
     const sendResult = await sendTelegramMessage(botToken, chatId, message, replyMarkup);
 
-    console.log(`[${requestId}] Notification sent: ${sendResult.ok}`);
+    console.log(`[${requestId}] ========== RESULT ==========`);
+    console.log(`[${requestId}] Message sent: ${sendResult.ok}`);
+    console.log(`[${requestId}] Invite link generated: ${!!generatedInviteLink}`);
+    if (generatedInviteLink) {
+      console.log(`[${requestId}] Invite link: ${generatedInviteLink}`);
+    }
+    console.log(`[${requestId}] ========== NOTIFY SUBSCRIBER END ==========`);
 
     return new Response(JSON.stringify({ 
       success: true, 
@@ -423,7 +445,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error(`[${requestId}] Error:`, error);
+    console.error(`[${requestId}] FATAL ERROR:`, error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
