@@ -152,31 +152,27 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   };
 
   const handleApprove = async () => {
+    // Business rule: Only allow approve for pending_approval or awaiting_proof
+    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
+    if (!allowedStatuses.includes(subscriber.status)) {
+      toast.error("Cannot approve subscriber", { 
+        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     setIsApproving(true);
     try {
       const plan = subscriber.plans;
       const durationDays = plan?.duration_days || 30;
       const now = new Date();
       
-      // For renewals: if subscriber is active with future expiry, extend from current expiry
-      // Otherwise start from today
-      let startDate: Date;
-      let expiryDate: Date;
-      const isExtension = subscriber.status === "active" && subscriber.expiry_date && new Date(subscriber.expiry_date) > now;
-      
-      if (isExtension) {
-        // Extension - keep original start date, extend from current expiry
-        startDate = subscriber.start_date ? new Date(subscriber.start_date) : now;
-        expiryDate = new Date(subscriber.expiry_date!);
-        expiryDate.setDate(expiryDate.getDate() + durationDays);
-      } else {
-        // New subscription or reactivation - start from today
-        startDate = now;
-        expiryDate = new Date(now);
-        expiryDate.setDate(expiryDate.getDate() + durationDays);
-      }
+      // New subscription - start from today
+      const startDate = now;
+      const expiryDate = new Date(now);
+      expiryDate.setDate(expiryDate.getDate() + durationDays);
 
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({
           status: "active",
@@ -187,12 +183,18 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
           rejection_reason: null,
           suspended_at: null,
         })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .in("status", allowedStatuses);
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        onUpdate();
+        return;
+      }
 
-      // Notify subscriber with invite link (use "extended" action for extensions)
-      await notifySubscriber(isExtension ? "extended" : "approved", { expiry_date: expiryDate.toISOString() });
+      // Notify subscriber with invite link
+      await notifySubscriber("approved", { expiry_date: expiryDate.toISOString() });
 
       toast.success("Subscriber approved!", {
         description: `Subscription active until ${format(expiryDate, "MMM d, yyyy")}. Invite link sent via bot.`,
@@ -207,17 +209,32 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   };
 
   const handleReject = async () => {
+    // Business rule: Only allow reject for pending_approval or awaiting_proof
+    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
+    if (!allowedStatuses.includes(subscriber.status)) {
+      toast.error("Cannot reject subscriber", { 
+        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     setIsRejecting(true);
     try {
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({ 
           status: "rejected",
           rejection_reason: rejectionReason || null,
         })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .in("status", allowedStatuses);
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        onUpdate();
+        return;
+      }
 
       // Notify subscriber via bot
       await notifySubscriber("rejected", { reason: rejectionReason });
@@ -264,17 +281,32 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   };
 
   const handleReactivate = async () => {
+    // Business rule: Only allow reactivate for suspended or rejected subscribers
+    const allowedStatuses: Subscriber["status"][] = ["suspended", "rejected"];
+    if (!allowedStatuses.includes(subscriber.status)) {
+      toast.error("Cannot reactivate subscriber", { 
+        description: `Subscriber must be 'Suspended' or 'Rejected' to reactivate. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({ 
           status: "active",
           suspended_at: null,
           rejection_reason: null,
         })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .in("status", allowedStatuses);
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        onUpdate();
+        return;
+      }
 
       // Notify subscriber with new invite link
       await notifySubscriber("reactivated");
@@ -287,6 +319,14 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   };
 
   const handleExtend = async () => {
+    // Business rule: Only allow extend for active subscribers
+    if (subscriber.status !== "active") {
+      toast.error("Cannot extend subscription", { 
+        description: `Subscriber must be 'Active' to extend. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     const days = parseInt(extensionDays);
     if (isNaN(days) || days <= 0) {
       toast.error("Please enter a valid number of days");
@@ -308,17 +348,22 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
       const newExpiry = new Date(baseDate);
       newExpiry.setDate(newExpiry.getDate() + days);
 
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({
           expiry_date: newExpiry.toISOString(),
-          status: "active",
           expiry_reminder_sent: false,
           final_reminder_sent: false,
         })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .eq("status", "active");
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        onUpdate();
+        return;
+      }
 
       // Notify subscriber about the extension
       await notifySubscriber("extended", { expiry_date: newExpiry.toISOString() });

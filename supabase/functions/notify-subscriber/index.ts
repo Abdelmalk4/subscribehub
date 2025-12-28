@@ -231,7 +231,8 @@ serve(async (req) => {
           bot_token,
           channel_id,
           project_name,
-          support_contact
+          support_contact,
+          user_id
         ),
         plans(plan_name, duration_days)
       `)
@@ -242,6 +243,16 @@ serve(async (req) => {
       console.error(`[${requestId}] Subscriber not found:`, subError);
       return new Response(JSON.stringify({ error: "Subscriber not found" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate ownership: ensure the authenticated user owns this project
+    // Skip ownership check for service key (internal calls)
+    if (authResult.userId && subscriber.projects.user_id !== authResult.userId) {
+      console.error(`[${requestId}] User ${authResult.userId} does not own project for subscriber ${subscriber_id}`);
+      return new Response(JSON.stringify({ error: "Forbidden: You don't own this subscriber's project" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
