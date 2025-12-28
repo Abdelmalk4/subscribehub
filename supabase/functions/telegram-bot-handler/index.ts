@@ -80,6 +80,13 @@ interface TelegramUpdate {
     chat: { id: number; type: string };
     date: number;
     text?: string;
+    photo?: Array<{
+      file_id: string;
+      file_unique_id: string;
+      file_size?: number;
+      width: number;
+      height: number;
+    }>;
   };
   callback_query?: {
     id: string;
@@ -143,6 +150,102 @@ async function answerCallbackQuery(botToken: string, callbackQueryId: string, te
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
   });
+}
+
+// Get file path from Telegram
+async function getTelegramFile(botToken: string, fileId: string): Promise<string | null> {
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/getFile`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_id: fileId }),
+    });
+    const result = await response.json();
+    
+    if (result.ok && result.result?.file_path) {
+      return result.result.file_path;
+    }
+    console.error("Failed to get file path:", result);
+    return null;
+  } catch (error) {
+    console.error("Error getting file path:", error);
+    return null;
+  }
+}
+
+// Download file from Telegram servers
+async function downloadTelegramFile(botToken: string, filePath: string): Promise<Uint8Array | null> {
+  try {
+    const url = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.error("Failed to download file:", response.status, response.statusText);
+      return null;
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  } catch (error) {
+    console.error("Error downloading file:", error);
+    return null;
+  }
+}
+
+// Upload payment proof to Supabase Storage and return signed URL
+async function uploadPaymentProof(
+  supabase: any,
+  projectId: string,
+  subscriberId: string,
+  fileData: Uint8Array,
+  filePath: string
+): Promise<string | null> {
+  try {
+    // Extract file extension from the path
+    const extension = filePath.split('.').pop() || 'jpg';
+    const fileName = `${projectId}/${subscriberId}/${Date.now()}.${extension}`;
+    
+    // Determine content type
+    const contentTypeMap: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+    };
+    const contentType = contentTypeMap[extension.toLowerCase()] || 'image/jpeg';
+    
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from('payment-proofs')
+      .upload(fileName, fileData, {
+        contentType,
+        upsert: false,
+      });
+    
+    if (error) {
+      console.error("Storage upload error:", error);
+      return null;
+    }
+    
+    console.log("File uploaded successfully:", data.path);
+    
+    // Create signed URL (valid for 1 year)
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('payment-proofs')
+      .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year
+    
+    if (signedError) {
+      console.error("Error creating signed URL:", signedError);
+      return null;
+    }
+    
+    return signedData.signedUrl;
+  } catch (error) {
+    console.error("Error uploading payment proof:", error);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -297,10 +400,15 @@ serve(async (req) => {
     }
 
     // Handle photo messages (payment proof)
-    if (update.message && !update.message.text) {
+    if (update.message?.photo && update.message.photo.length > 0) {
       const { message } = update;
       const userId = message.from.id;
       const chatId = message.chat.id;
+      const photos = message.photo!;
+      
+      // Get the largest photo (last in array)
+      const largestPhoto = photos[photos.length - 1];
+      const fileId = largestPhoto.file_id;
 
       const { data: subscriber } = await supabase
         .from("subscribers")
@@ -311,16 +419,114 @@ serve(async (req) => {
         .single();
 
       if (subscriber) {
+        const sub = subscriber as Subscriber;
+        
+        // Send processing message
         await sendTelegramMessage(
           botToken,
           chatId,
-          "📸 Payment proof received!\n\nOur team will review your payment and activate your subscription shortly."
+          "📸 Processing your payment proof..."
         );
-
-        await supabase
-          .from("subscribers")
-          .update({ status: "pending_approval", payment_proof_url: "Photo received via Telegram", updated_at: new Date().toISOString() })
-          .eq("id", (subscriber as Subscriber).id);
+        
+        // Get file path from Telegram
+        const filePath = await getTelegramFile(botToken, fileId);
+        
+        if (filePath) {
+          // Download the file
+          const fileData = await downloadTelegramFile(botToken, filePath);
+          
+          if (fileData) {
+            // Upload to Supabase Storage
+            const paymentProofUrl = await uploadPaymentProof(
+              supabase,
+              projectId,
+              sub.id,
+              fileData,
+              filePath
+            );
+            
+            if (paymentProofUrl) {
+              // Update subscriber with the actual URL
+              await supabase
+                .from("subscribers")
+                .update({ 
+                  status: "pending_approval", 
+                  payment_proof_url: paymentProofUrl, 
+                  updated_at: new Date().toISOString() 
+                })
+                .eq("id", sub.id);
+              
+              await sendTelegramMessage(
+                botToken,
+                chatId,
+                "✅ Payment proof uploaded successfully!\n\nOur team will review your payment and activate your subscription shortly."
+              );
+              
+              console.log(`Payment proof stored for subscriber ${sub.id}: ${paymentProofUrl}`);
+            } else {
+              // Fallback: store placeholder and notify
+              await supabase
+                .from("subscribers")
+                .update({ 
+                  status: "pending_approval", 
+                  payment_proof_url: `telegram_file:${fileId}`, 
+                  updated_at: new Date().toISOString() 
+                })
+                .eq("id", sub.id);
+              
+              await sendTelegramMessage(
+                botToken,
+                chatId,
+                "📸 Payment proof received!\n\nOur team will review your payment and activate your subscription shortly."
+              );
+              
+              console.warn(`Failed to upload to storage, saved file_id reference for subscriber ${sub.id}`);
+            }
+          } else {
+            // Download failed
+            await supabase
+              .from("subscribers")
+              .update({ 
+                status: "pending_approval", 
+                payment_proof_url: `telegram_file:${fileId}`, 
+                updated_at: new Date().toISOString() 
+              })
+              .eq("id", sub.id);
+            
+            await sendTelegramMessage(
+              botToken,
+              chatId,
+              "📸 Payment proof received!\n\nOur team will review your payment and activate your subscription shortly."
+            );
+            
+            console.warn(`Failed to download file, saved file_id reference for subscriber ${sub.id}`);
+          }
+        } else {
+          // File path retrieval failed
+          await supabase
+            .from("subscribers")
+            .update({ 
+              status: "pending_approval", 
+              payment_proof_url: `telegram_file:${fileId}`, 
+              updated_at: new Date().toISOString() 
+            })
+            .eq("id", sub.id);
+          
+          await sendTelegramMessage(
+            botToken,
+            chatId,
+            "📸 Payment proof received!\n\nOur team will review your payment and activate your subscription shortly."
+          );
+          
+          console.warn(`Failed to get file path, saved file_id reference for subscriber ${sub.id}`);
+        }
+      } else {
+        // No awaiting proof subscriber found
+        await sendTelegramMessage(
+          botToken,
+          chatId,
+          "❓ We received your photo, but you don't have a pending payment.\n\nUse /start to subscribe or /status to check your subscription."
+        );
       }
     }
 
@@ -428,8 +634,24 @@ async function handleStatus(supabase: any, project: Project, userId: number, cha
   }
 
   const sub = subscriber as Subscriber;
-  const statusEmoji: Record<string, string> = { active: "✅", pending_payment: "⏳", pending_approval: "🔄", awaiting_proof: "📤", expired: "❌", rejected: "🚫" };
-  const statusText: Record<string, string> = { active: "Active", pending_payment: "Pending Payment", pending_approval: "Pending Approval", awaiting_proof: "Awaiting Payment Proof", expired: "Expired", rejected: "Rejected" };
+  const statusEmoji: Record<string, string> = { 
+    active: "✅", 
+    pending_payment: "⏳", 
+    pending_approval: "🔄", 
+    awaiting_proof: "📤", 
+    expired: "❌", 
+    rejected: "🚫",
+    suspended: "⚠️"
+  };
+  const statusText: Record<string, string> = { 
+    active: "Active", 
+    pending_payment: "Pending Payment", 
+    pending_approval: "Pending Approval", 
+    awaiting_proof: "Awaiting Payment Proof", 
+    expired: "Expired", 
+    rejected: "Rejected",
+    suspended: "Suspended"
+  };
 
   const emoji = statusEmoji[sub.status] || "❓";
   const status = statusText[sub.status] || sub.status;
@@ -445,6 +667,14 @@ async function handleStatus(supabase: any, project: Project, userId: number, cha
       message += `\n⚠️ Expires in <b>${daysLeft} days</b>! Use /renew to extend.`;
     } else if (daysLeft <= 0) {
       message += `\n⚠️ Subscription expired! Use /renew to reactivate.`;
+    }
+  }
+  
+  // Handle suspended status message
+  if (sub.status === "suspended") {
+    message += `\n\n⚠️ Your subscription has been suspended. Please contact support for assistance.`;
+    if (project.support_contact) {
+      message += `\n📞 Support: ${sanitizeForHTML(project.support_contact)}`;
     }
   }
 
@@ -575,12 +805,61 @@ async function handlePaymentMethod(
       .eq("project_id", project.id)
       .eq("telegram_user_id", userId);
 
-    const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || "Please send your payment to complete the subscription.";
+    // Fetch platform payment methods
+    const { data: paymentMethods } = await supabase
+      .from("platform_payment_methods")
+      .select("*")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true });
+
+    let paymentInstructions = "";
+    
+    if (paymentMethods && paymentMethods.length > 0) {
+      paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
+      
+      for (const pm of paymentMethods) {
+        paymentInstructions += `<b>${pm.method_name}</b> (${pm.method_type})\n`;
+        
+        // Format details based on method type
+        const details = pm.details as Record<string, string>;
+        if (pm.method_type === "bank_transfer" && details) {
+          if (details.bank_name) paymentInstructions += `🏦 Bank: ${details.bank_name}\n`;
+          if (details.account_name) paymentInstructions += `👤 Name: ${details.account_name}\n`;
+          if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
+          if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
+        } else if (pm.method_type === "crypto" && details) {
+          if (details.network) paymentInstructions += `🔗 Network: ${details.network}\n`;
+          if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
+        } else if (pm.method_type === "mobile_money" && details) {
+          if (details.provider) paymentInstructions += `📱 Provider: ${details.provider}\n`;
+          if (details.phone_number) paymentInstructions += `📞 Number: ${details.phone_number}\n`;
+          if (details.name) paymentInstructions += `👤 Name: ${details.name}\n`;
+        } else if (details) {
+          // Generic details display
+          for (const [key, value] of Object.entries(details)) {
+            if (value) {
+              const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              paymentInstructions += `${formattedKey}: ${value}\n`;
+            }
+          }
+        }
+        
+        if (pm.instructions) {
+          paymentInstructions += `📌 ${pm.instructions}\n`;
+        }
+        
+        paymentInstructions += "\n";
+      }
+    } else {
+      // Fallback to project-level instructions
+      const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || "Please send your payment to complete the subscription.";
+      paymentInstructions = `📝 <b>Instructions:</b>\n${instructions}`;
+    }
 
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      `💳 <b>Manual Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n📝 <b>Instructions:</b>\n${instructions}\n\nAfter payment, send a screenshot of your payment confirmation here.`
+      `💳 <b>Manual Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n${paymentInstructions}\n✅ After payment, send a screenshot of your payment confirmation here.`
     );
   } else if (method === "stripe") {
     // Get subscriber ID
