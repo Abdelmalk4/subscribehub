@@ -339,6 +339,9 @@ export type Database = {
       subscribers: {
         Row: {
           approved_by_admin_id: string | null
+          channel_joined: boolean | null
+          channel_joined_at: string | null
+          channel_membership_status: string | null
           created_at: string | null
           expiry_date: string | null
           expiry_reminder_sent: boolean | null
@@ -346,6 +349,7 @@ export type Database = {
           first_name: string | null
           id: string
           invite_link: string | null
+          last_membership_check: string | null
           notes: string | null
           payment_method: string | null
           payment_proof_url: string | null
@@ -362,6 +366,9 @@ export type Database = {
         }
         Insert: {
           approved_by_admin_id?: string | null
+          channel_joined?: boolean | null
+          channel_joined_at?: string | null
+          channel_membership_status?: string | null
           created_at?: string | null
           expiry_date?: string | null
           expiry_reminder_sent?: boolean | null
@@ -369,6 +376,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           invite_link?: string | null
+          last_membership_check?: string | null
           notes?: string | null
           payment_method?: string | null
           payment_proof_url?: string | null
@@ -385,6 +393,9 @@ export type Database = {
         }
         Update: {
           approved_by_admin_id?: string | null
+          channel_joined?: boolean | null
+          channel_joined_at?: string | null
+          channel_membership_status?: string | null
           created_at?: string | null
           expiry_date?: string | null
           expiry_reminder_sent?: boolean | null
@@ -392,6 +403,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           invite_link?: string | null
+          last_membership_check?: string | null
           notes?: string | null
           payment_method?: string | null
           payment_proof_url?: string | null
