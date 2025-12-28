@@ -159,28 +159,32 @@ async function kickFromChannel(botToken: string, channelId: string, userId: numb
 }
 
 // ============= AUTHENTICATION =============
-function verifyAuth(req: Request): boolean {
+async function verifyAuth(req: Request, supabase: any): Promise<{ valid: boolean; userId?: string }> {
   const authHeader = req.headers.get("authorization");
   if (!authHeader) {
     console.warn("[AUTH] No authorization header");
-    return false;
+    return { valid: false };
   }
   
-  // Accept service role key or anon key with valid JWT
   const token = authHeader.replace("Bearer ", "");
   
   // For internal calls from other edge functions using service key
   if (token === supabaseServiceKey) {
-    return true;
+    return { valid: true };
   }
   
-  // For calls from the frontend (via supabase.functions.invoke)
-  // The SDK adds the anon/user JWT - we trust these since they come through our SDK
-  if (token && token.split('.').length === 3) {
-    return true;
+  // For calls from the frontend - verify the JWT and get user
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      console.warn("[AUTH] Invalid JWT:", error?.message);
+      return { valid: false };
+    }
+    return { valid: true, userId: user.id };
+  } catch (err) {
+    console.warn("[AUTH] JWT verification failed:", err);
+    return { valid: false };
   }
-  
-  return false;
 }
 
 // ============= MAIN HANDLER =============
@@ -193,8 +197,11 @@ serve(async (req) => {
   console.log(`[${requestId}] Notify subscriber request`);
 
   try {
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     // Verify authentication
-    if (!verifyAuth(req)) {
+    const authResult = await verifyAuth(req, supabase);
+    if (!authResult.valid) {
       console.error(`[${requestId}] Unauthorized request`);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -202,7 +209,6 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const body: NotifyRequest = await req.json();
     
     const { subscriber_id, action, reason, invite_link, expiry_date, days_remaining } = body;
