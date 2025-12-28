@@ -205,8 +205,6 @@ async function answerCallbackQuery(
 }
 
 async function getTelegramFile(botToken: string, fileId: string): Promise<{ filePath: string | null; fileSize: number }> {
-
-async function getTelegramFile(botToken: string, fileId: string): Promise<{ filePath: string | null; fileSize: number }> {
   try {
     const url = `https://api.telegram.org/bot${botToken}/getFile`;
     const response = await fetch(url, {
@@ -1014,5 +1012,3 @@ async function handlePaymentMethod(
     }
   }
 }
-
-export { generateWebhookSecret };
