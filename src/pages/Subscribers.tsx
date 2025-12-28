@@ -310,22 +310,39 @@ export default function Subscribers() {
   };
 
   const handleQuickApprove = async (subscriber: Subscriber) => {
+    // Business rule: Only allow approve for pending_approval or awaiting_proof
+    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
+    if (!allowedStatuses.includes(subscriber.status)) {
+      toast.error("Cannot approve subscriber", { 
+        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     try {
       const plan = subscriber.plans;
       const startDate = new Date();
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + (plan?.duration_days || 30));
 
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({
           status: "active",
           start_date: startDate.toISOString(),
           expiry_date: expiryDate.toISOString(),
+          expiry_reminder_sent: false,
+          final_reminder_sent: false,
         })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .in("status", allowedStatuses);
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        fetchSubscribers();
+        return;
+      }
 
       toast.success("Subscriber approved!");
       fetchSubscribers();
@@ -336,13 +353,28 @@ export default function Subscribers() {
   };
 
   const handleQuickReject = async (subscriber: Subscriber) => {
+    // Business rule: Only allow reject for pending_approval or awaiting_proof
+    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
+    if (!allowedStatuses.includes(subscriber.status)) {
+      toast.error("Cannot reject subscriber", { 
+        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
+      });
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      const { error, count } = await supabase
         .from("subscribers")
         .update({ status: "rejected" })
-        .eq("id", subscriber.id);
+        .eq("id", subscriber.id)
+        .in("status", allowedStatuses);
 
       if (error) throw error;
+      if (count === 0) {
+        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        fetchSubscribers();
+        return;
+      }
 
       toast.success("Subscriber rejected");
       fetchSubscribers();
