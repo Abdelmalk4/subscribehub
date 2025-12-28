@@ -156,26 +156,23 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
     try {
       const plan = subscriber.plans;
       const durationDays = plan?.duration_days || 30;
+      const now = new Date();
       
       // For renewals: if subscriber is active with future expiry, extend from current expiry
       // Otherwise start from today
-      let startDate = new Date();
+      let startDate: Date;
       let expiryDate: Date;
+      const isExtension = subscriber.status === "active" && subscriber.expiry_date && new Date(subscriber.expiry_date) > now;
       
-      if (subscriber.status === "active" && subscriber.expiry_date) {
-        const currentExpiry = new Date(subscriber.expiry_date);
-        if (currentExpiry > new Date()) {
-          // Active with future expiry - extend from current expiry
-          expiryDate = new Date(currentExpiry);
-          expiryDate.setDate(expiryDate.getDate() + durationDays);
-        } else {
-          // Expired - start fresh from today
-          expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + durationDays);
-        }
+      if (isExtension) {
+        // Extension - keep original start date, extend from current expiry
+        startDate = subscriber.start_date ? new Date(subscriber.start_date) : now;
+        expiryDate = new Date(subscriber.expiry_date!);
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
       } else {
-        // New subscription or other status - start from today
-        expiryDate = new Date();
+        // New subscription or reactivation - start from today
+        startDate = now;
+        expiryDate = new Date(now);
         expiryDate.setDate(expiryDate.getDate() + durationDays);
       }
 
@@ -194,8 +191,8 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
       if (error) throw error;
 
-      // Notify subscriber with invite link
-      await notifySubscriber("approved", { expiry_date: expiryDate.toISOString() });
+      // Notify subscriber with invite link (use "extended" action for extensions)
+      await notifySubscriber(isExtension ? "extended" : "approved", { expiry_date: expiryDate.toISOString() });
 
       toast.success("Subscriber approved!", {
         description: `Subscription active until ${format(expiryDate, "MMM d, yyyy")}. Invite link sent via bot.`,
