@@ -158,6 +158,40 @@ async function kickFromChannel(botToken: string, channelId: string, userId: numb
   }
 }
 
+// Check if user is a member of the channel
+async function checkChannelMembership(
+  botToken: string,
+  channelId: string,
+  userId: number
+): Promise<{ isMember: boolean; status: string }> {
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/getChatMember`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: channelId, user_id: userId }),
+    });
+
+    const result = await response.json();
+    console.log("[TELEGRAM] getChatMember response:", JSON.stringify(result));
+
+    if (!result.ok) {
+      if (result.error_code === 400 && result.description?.includes("user not found")) {
+        return { isMember: false, status: "never_joined" };
+      }
+      return { isMember: false, status: "unknown" };
+    }
+
+    const memberStatus = result.result?.status;
+    const isMember = ["member", "administrator", "creator", "restricted"].includes(memberStatus);
+    
+    return { isMember, status: memberStatus };
+  } catch (error) {
+    console.error("[TELEGRAM] Error checking membership:", error);
+    return { isMember: false, status: "unknown" };
+  }
+}
+
 // ============= AUTHENTICATION =============
 async function verifyAuth(req: Request, supabase: any): Promise<{ valid: boolean; userId?: string }> {
   const authHeader = req.headers.get("authorization");
@@ -320,15 +354,59 @@ serve(async (req) => {
         break;
 
       case "extended":
+        // Check if user is still in the channel before extending
+        const membershipCheck = await checkChannelMembership(botToken, channelId, chatId);
+        console.log(`[${requestId}] Membership check for extend: isMember=${membershipCheck.isMember}, status=${membershipCheck.status}`);
+        
+        // Update membership status in database
+        await supabase
+          .from("subscribers")
+          .update({
+            channel_joined: membershipCheck.isMember,
+            channel_membership_status: membershipCheck.status,
+            last_membership_check: new Date().toISOString(),
+          })
+          .eq("id", subscriber_id);
+        
         const newExpiryText = expiry_date 
           ? new Date(expiry_date).toLocaleDateString() 
           : "N/A";
         
-        message = `✅ <b>Subscription Extended!</b>\n\n` +
-          `Your subscription to <b>${projectName}</b> has been extended.\n\n` +
-          `📦 Plan: <b>${planName}</b>\n` +
-          `📅 New Expiry: <b>${newExpiryText}</b>\n\n` +
-          `Thank you for your continued support!`;
+        if (!membershipCheck.isMember) {
+          // User is not in the channel - generate new invite link
+          generatedInviteLink = await createChannelInviteLink(botToken, channelId);
+          
+          if (generatedInviteLink) {
+            await supabase
+              .from("subscribers")
+              .update({ invite_link: generatedInviteLink })
+              .eq("id", subscriber_id);
+            
+            message = `✅ <b>Subscription Extended!</b>\n\n` +
+              `Your subscription to <b>${projectName}</b> has been extended.\n\n` +
+              `📦 Plan: <b>${planName}</b>\n` +
+              `📅 New Expiry: <b>${newExpiryText}</b>\n\n` +
+              `⚠️ It looks like you're not in the channel. Click below to rejoin:`;
+            
+            replyMarkup = {
+              inline_keyboard: [[
+                { text: "🔗 Join Channel", url: generatedInviteLink }
+              ]]
+            };
+          } else {
+            message = `✅ <b>Subscription Extended!</b>\n\n` +
+              `Your subscription to <b>${projectName}</b> has been extended.\n\n` +
+              `📦 Plan: <b>${planName}</b>\n` +
+              `📅 New Expiry: <b>${newExpiryText}</b>\n\n` +
+              `⚠️ It looks like you're not in the channel. Please contact support.`;
+          }
+        } else {
+          message = `✅ <b>Subscription Extended!</b>\n\n` +
+            `Your subscription to <b>${projectName}</b> has been extended.\n\n` +
+            `📦 Plan: <b>${planName}</b>\n` +
+            `📅 New Expiry: <b>${newExpiryText}</b>\n\n` +
+            `Thank you for your continued support!`;
+        }
         break;
 
       case "expiring_soon":
