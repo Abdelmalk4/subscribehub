@@ -9,6 +9,10 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Max retry attempts for Telegram API calls
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;
+
 interface Subscriber {
   id: string;
   telegram_user_id: number;
@@ -27,9 +31,36 @@ interface Subscriber {
   } | null;
 }
 
-async function sendTelegramMessage(botToken: string, chatId: number, text: string) {
-  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-  try {
+// Retry wrapper with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  operationName: string,
+  maxRetries: number = MAX_RETRIES
+): Promise<T | null> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`${operationName} attempt ${attempt}/${maxRetries} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  console.error(`${operationName} failed after ${maxRetries} attempts:`, lastError?.message);
+  return null;
+}
+
+async function sendTelegramMessage(botToken: string, chatId: number, text: string): Promise<{ ok: boolean; description?: string } | null> {
+  return await withRetry(async () => {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -39,18 +70,30 @@ async function sendTelegramMessage(botToken: string, chatId: number, text: strin
         parse_mode: "HTML",
       }),
     });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
     const data = await response.json();
-    console.log(`Message sent to ${chatId}:`, data.ok ? "success" : data.description);
+    
+    if (!data.ok) {
+      // Don't retry on certain permanent errors
+      if (data.error_code === 403 || data.error_code === 400) {
+        console.warn(`Telegram API error (non-retryable): ${data.description}`);
+        return data; // Return the error response without retrying
+      }
+      throw new Error(`Telegram API error: ${data.description}`);
+    }
+    
+    console.log(`Message sent to ${chatId}: success`);
     return data;
-  } catch (error) {
-    console.error(`Failed to send message to ${chatId}:`, error);
-    return null;
-  }
+  }, `sendTelegramMessage(${chatId})`);
 }
 
-async function kickFromChannel(botToken: string, channelId: string, userId: number) {
-  const url = `https://api.telegram.org/bot${botToken}/banChatMember`;
-  try {
+async function kickFromChannel(botToken: string, channelId: string, userId: number): Promise<boolean> {
+  const result = await withRetry(async () => {
+    const url = `https://api.telegram.org/bot${botToken}/banChatMember`;
     // Ban briefly then unban to just remove them
     const banResponse = await fetch(url, {
       method: "POST",
@@ -61,13 +104,27 @@ async function kickFromChannel(botToken: string, channelId: string, userId: numb
         until_date: Math.floor(Date.now() / 1000) + 60, // Ban for 60 seconds then auto-unban
       }),
     });
+    
+    if (!banResponse.ok) {
+      throw new Error(`HTTP ${banResponse.status}: ${banResponse.statusText}`);
+    }
+    
     const data = await banResponse.json();
-    console.log(`Kicked user ${userId} from ${channelId}:`, data.ok ? "success" : data.description);
-    return data;
-  } catch (error) {
-    console.error(`Failed to kick user ${userId}:`, error);
-    return null;
-  }
+    
+    if (!data.ok) {
+      // Don't retry if user is already not in chat or bot doesn't have permissions
+      if (data.error_code === 400 || data.error_code === 403) {
+        console.warn(`Kick user ${userId} - non-retryable error: ${data.description}`);
+        return true; // Consider it "handled"
+      }
+      throw new Error(`Telegram API error: ${data.description}`);
+    }
+    
+    console.log(`Kicked user ${userId} from ${channelId}: success`);
+    return true;
+  }, `kickFromChannel(${userId})`);
+  
+  return result === true;
 }
 
 function formatDate(dateStr: string): string {
@@ -119,6 +176,7 @@ serve(async (req) => {
 
     if (threeDayError) {
       console.error("Error fetching 3-day subscribers:", threeDayError);
+      stats.errors++;
     } else if (threeDayAway && threeDayAway.length > 0) {
       console.log(`Found ${threeDayAway.length} subscribers expiring in ~3 days`);
 
@@ -134,11 +192,17 @@ serve(async (req) => {
         const result = await sendTelegramMessage(sub.projects.bot_token, sub.telegram_user_id, message);
 
         if (result?.ok) {
-          await supabase
+          const { error: updateError } = await supabase
             .from("subscribers")
             .update({ expiry_reminder_sent: true, updated_at: now.toISOString() })
             .eq("id", sub.id);
-          stats.threeDayReminders++;
+          
+          if (updateError) {
+            console.error(`Failed to update expiry_reminder_sent for ${sub.id}:`, updateError);
+            stats.errors++;
+          } else {
+            stats.threeDayReminders++;
+          }
         } else {
           stats.errors++;
         }
@@ -159,6 +223,7 @@ serve(async (req) => {
 
     if (oneDayError) {
       console.error("Error fetching 1-day subscribers:", oneDayError);
+      stats.errors++;
     } else if (oneDayAway && oneDayAway.length > 0) {
       console.log(`Found ${oneDayAway.length} subscribers expiring tomorrow`);
 
@@ -173,7 +238,7 @@ serve(async (req) => {
         const result = await sendTelegramMessage(sub.projects.bot_token, sub.telegram_user_id, message);
 
         if (result?.ok) {
-          await supabase
+          const { error: updateError } = await supabase
             .from("subscribers")
             .update({
               expiry_reminder_sent: true,
@@ -181,7 +246,13 @@ serve(async (req) => {
               updated_at: now.toISOString(),
             })
             .eq("id", sub.id);
-          stats.oneDayReminders++;
+          
+          if (updateError) {
+            console.error(`Failed to update final_reminder_sent for ${sub.id}:`, updateError);
+            stats.errors++;
+          } else {
+            stats.oneDayReminders++;
+          }
         } else {
           stats.errors++;
         }
@@ -200,15 +271,22 @@ serve(async (req) => {
 
     if (expiredError) {
       console.error("Error fetching expired subscribers:", expiredError);
+      stats.errors++;
     } else if (expired && expired.length > 0) {
       console.log(`Found ${expired.length} expired subscriptions`);
 
       for (const sub of expired as Subscriber[]) {
-        // Update status to expired
-        await supabase
+        // Update status to expired first
+        const { error: updateError } = await supabase
           .from("subscribers")
           .update({ status: "expired", updated_at: now.toISOString() })
           .eq("id", sub.id);
+        
+        if (updateError) {
+          console.error(`Failed to update status to expired for ${sub.id}:`, updateError);
+          stats.errors++;
+          continue;
+        }
 
         // Kick from channel
         await kickFromChannel(sub.projects.bot_token, sub.projects.channel_id, sub.telegram_user_id);
@@ -218,7 +296,7 @@ serve(async (req) => {
           `❌ <b>Subscription Expired</b>\n\n` +
           `Your access to <b>${sub.projects.project_name}</b> has ended.\n\n` +
           `You have been removed from the channel.\n\n` +
-          `💡 To continue enjoying premium content, renew your subscription with /renew\n\n` +
+          `💡 To continue enjoying premium content, renew your subscription with /start\n\n` +
           `We hope to see you back soon! 🙏`;
 
         await sendTelegramMessage(sub.projects.bot_token, sub.telegram_user_id, message);

@@ -137,7 +137,7 @@ serve(async (req) => {
         });
       }
 
-      // Fetch subscriber details
+      // Fetch subscriber details with current expiry date
       const { data: subscriber, error: subError } = await supabase
         .from("subscribers")
         .select("*, plans(*)")
@@ -152,7 +152,7 @@ serve(async (req) => {
         });
       }
 
-      console.log("Found subscriber:", subscriber.id);
+      console.log("Found subscriber:", subscriber.id, "Current status:", subscriber.status, "Current expiry:", subscriber.expiry_date);
 
       // Fetch project
       const { data: project, error: projError } = await supabase
@@ -169,19 +169,43 @@ serve(async (req) => {
         });
       }
 
-      // Calculate dates
-      const startDate = new Date();
+      // Calculate dates - CRITICAL FIX: Extend from existing expiry if active and not expired
       const plan = subscriber.plans;
       const durationDays = plan?.duration_days || 30;
-      const expiryDate = new Date(startDate);
-      expiryDate.setDate(expiryDate.getDate() + durationDays);
+      
+      let startDate: Date;
+      let expiryDate: Date;
+      
+      // Check if this is an extension (subscriber is active with future expiry)
+      const currentExpiryDate = subscriber.expiry_date ? new Date(subscriber.expiry_date) : null;
+      const now = new Date();
+      
+      if (subscriber.status === "active" && currentExpiryDate && currentExpiryDate > now) {
+        // EXTENSION: Add duration to existing expiry date
+        startDate = new Date(subscriber.start_date || now);
+        expiryDate = new Date(currentExpiryDate);
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
+        
+        console.log(`EXTENSION: Adding ${durationDays} days to existing expiry ${currentExpiryDate.toISOString()}`);
+        console.log(`New expiry date: ${expiryDate.toISOString()}`);
+      } else {
+        // NEW SUBSCRIPTION or REACTIVATION: Start from now
+        startDate = now;
+        expiryDate = new Date(now);
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
+        
+        console.log(`NEW/REACTIVATION: Starting from ${startDate.toISOString()}, expiry: ${expiryDate.toISOString()}`);
+      }
 
-      // Create invite link
-      const inviteLink = await createInviteLink(
-        project.bot_token,
-        project.channel_id,
-        subscriber.first_name || `User ${subscriber.telegram_user_id}`
-      );
+      // Create invite link (only needed for new subscriptions or reactivations)
+      let inviteLink = subscriber.invite_link;
+      if (!inviteLink || subscriber.status !== "active") {
+        inviteLink = await createInviteLink(
+          project.bot_token,
+          project.channel_id,
+          subscriber.first_name || `User ${subscriber.telegram_user_id}`
+        );
+      }
 
       // Update subscriber
       const { error: updateError } = await supabase
@@ -192,6 +216,8 @@ serve(async (req) => {
           expiry_date: expiryDate.toISOString(),
           payment_method: "stripe",
           invite_link: inviteLink,
+          expiry_reminder_sent: false, // Reset reminders for extended subscriptions
+          final_reminder_sent: false,
           updated_at: new Date().toISOString(),
         })
         .eq("id", subscriberId);
@@ -199,21 +225,32 @@ serve(async (req) => {
       if (updateError) {
         console.error("Error updating subscriber:", updateError);
       } else {
-        console.log("Subscriber updated to active");
+        console.log("Subscriber updated to active with expiry:", expiryDate.toISOString());
       }
 
       // Send confirmation to user via Telegram
       if (subscriber.telegram_user_id) {
-        let message = `🎉 <b>Payment Successful!</b>\n\n`;
-        message += `✅ Your subscription is now active!\n`;
-        message += `📦 Plan: ${plan?.plan_name || "Subscription"}\n`;
-        message += `📅 Valid until: ${expiryDate.toLocaleDateString()}\n\n`;
-
-        if (inviteLink) {
-          message += `🔗 <b>Join the channel:</b>\n${inviteLink}\n\n`;
-          message += `⚠️ This link can only be used once.`;
+        const isExtension = subscriber.status === "active" && currentExpiryDate && currentExpiryDate > now;
+        
+        let message = "";
+        if (isExtension) {
+          message = `🎉 <b>Subscription Extended!</b>\n\n`;
+          message += `✅ Your subscription has been extended.\n`;
+          message += `📦 Plan: ${plan?.plan_name || "Subscription"}\n`;
+          message += `📅 New expiry date: ${expiryDate.toLocaleDateString()}\n\n`;
+          message += `Thank you for your continued support! 🙏`;
         } else {
-          message += `Our team will grant you access shortly.`;
+          message = `🎉 <b>Payment Successful!</b>\n\n`;
+          message += `✅ Your subscription is now active!\n`;
+          message += `📦 Plan: ${plan?.plan_name || "Subscription"}\n`;
+          message += `📅 Valid until: ${expiryDate.toLocaleDateString()}\n\n`;
+
+          if (inviteLink) {
+            message += `🔗 <b>Join the channel:</b>\n${inviteLink}\n\n`;
+            message += `⚠️ This link can only be used once.`;
+          } else {
+            message += `Our team will grant you access shortly.`;
+          }
         }
 
         await sendTelegramMessage(project.bot_token, subscriber.telegram_user_id, message);
