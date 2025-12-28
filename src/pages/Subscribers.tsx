@@ -666,11 +666,15 @@ export default function Subscribers() {
                                   </DropdownMenuItem>
                                 </>
                               )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
-                                <Clock className="h-4 w-4 mr-2" />
-                                Extend Subscription
-                              </DropdownMenuItem>
+                              {subscriber.status === "active" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
+                                    <Clock className="h-4 w-4 mr-2" />
+                                    Extend Subscription
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
