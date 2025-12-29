@@ -9,11 +9,13 @@ import {
   CreditCard,
   LogOut,
   Search,
-  Bell,
-  Sparkles,
   MessageSquare,
   Shield,
   ChevronRight,
+  ChevronLeft,
+  Info,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,8 +50,6 @@ const adminNavItems: NavItem[] = [
 
 interface SidebarProps {
   isAdmin?: boolean;
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 interface Subscription {
@@ -63,11 +63,13 @@ interface Subscription {
   } | null;
 }
 
-export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange }: SidebarProps) {
+export function Sidebar({ isAdmin = false }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [isOpen, setIsOpen] = useState(true);
+  const [showPromo, setShowPromo] = useState(true);
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
 
@@ -117,122 +119,161 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
     return { planName, daysLeft, progress };
   };
 
-  const { daysLeft, progress } = getSubscriptionInfo();
+  const { daysLeft } = getSubscriptionInfo();
+
+  const favorites = [
+    { id: 'subscribers-fav', label: 'Active Subscribers' },
+    { id: 'analytics-fav', label: 'Monthly Report' },
+    { id: 'projects-fav', label: 'Main Project' },
+  ];
 
   return (
-    <aside className="sticky top-0 z-30 h-screen w-60 shrink-0 border-r border-border bg-card">
+    <aside className={cn(
+      "sticky top-0 z-30 h-screen shrink-0 border-r border-border bg-card transition-all duration-300",
+      isOpen ? "w-64" : "w-20"
+    )}>
       <div className="h-full flex flex-col">
-        {/* Logo */}
-        <div className="h-14 flex items-center px-4 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-2">
+        {/* Logo Header */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border">
+          <Link to="/dashboard" className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-foreground flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-background" />
+              <span className="font-bold text-background text-sm">S</span>
             </div>
-            <span className="font-semibold text-foreground">SubscribeHub</span>
+            {isOpen && <span className="font-bold text-foreground tracking-tight">SubscribeHub</span>}
           </Link>
+          <button 
+            onClick={() => setIsOpen(!isOpen)} 
+            className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+          </button>
         </div>
 
         {/* Search */}
-        <div className="p-3">
-          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-            <Search className="h-4 w-4" />
-            <span>Search...</span>
-            <kbd className="ml-auto text-xs bg-background px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
-          </button>
-        </div>
-
-        {/* Quick Links */}
-        <div className="px-3 space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
-            <Bell className="h-4 w-4" />
-            <span>Notifications</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
-            <MessageSquare className="h-4 w-4" />
-            <span>AI Assistant</span>
-          </button>
+        <div className="px-4 py-3">
+          <div className="relative group">
+            <Search size={16} className="absolute left-3 top-2.5 text-muted-foreground" />
+            {isOpen ? (
+              <input
+                type="text"
+                placeholder="Search..."
+                className="w-full bg-muted border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground placeholder:text-muted-foreground"
+              />
+            ) : (
+              <button className="w-full flex items-center justify-center py-2 hover:bg-muted rounded-lg transition-colors">
+                <Search size={16} className="text-muted-foreground" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
-            const Icon = item.icon;
-            
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                  isActive
-                    ? "bg-muted text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-                {item.badge && (
-                  <span className="ml-auto bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded-full">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-6 custom-scrollbar">
+          {/* Main Menu */}
+          <div className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              const Icon = item.icon;
+              
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon size={18} />
+                  {isOpen && (
+                    <>
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {item.label === "Dashboard" && (
+                        <div className="w-2 h-2 bg-destructive rounded-full" />
+                      )}
+                    </>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Favorites */}
+          {isOpen && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3">
+                Favorites
+                <ChevronDown size={12} />
+              </div>
+              <div className="space-y-1">
+                {favorites.map((fav) => (
+                  <button 
+                    key={fav.id} 
+                    className="w-full flex items-center gap-3 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <div className="w-2 h-2 rounded-sm bg-foreground" />
+                    {fav.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </nav>
 
-        {/* Subscription Card */}
-        {!isAdmin && (
-          <div className="p-3">
-            <div className="p-3 bg-muted/50 rounded-lg border border-border">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-foreground">{daysLeft} Days Left!</span>
-                <button 
-                  onClick={() => navigate("/billing")}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <span className="sr-only">Close</span>
-                  ×
-                </button>
-              </div>
-              <Progress value={100 - progress} className="h-1.5 mb-2" />
-              <p className="text-xs text-muted-foreground mb-3">
+        {/* Bottom Section */}
+        <div className="p-4 border-t border-border space-y-4">
+          {/* Subscription Promo Card */}
+          {!isAdmin && isOpen && showPromo && (
+            <div className="bg-muted border border-border rounded-xl p-4 space-y-3 relative">
+              <button 
+                onClick={() => setShowPromo(false)}
+                className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+              <div className="font-bold text-sm text-foreground">{daysLeft} Days Left!</div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 Select a plan and unlock unlimited premium features.
               </p>
               <Button 
-                variant="default" 
+                variant="outline" 
                 size="sm" 
-                className="w-full justify-between"
+                className="w-full justify-between text-xs font-semibold"
                 onClick={() => navigate("/billing")}
               >
                 Select plan
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight size={14} />
               </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Footer Links */}
-        <div className="p-3 border-t border-border space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
-            <MessageSquare className="h-4 w-4" />
-            <span>Feedback</span>
-          </button>
-          <Link
-            to="/settings"
-            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Settings</span>
-          </Link>
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Sign Out</span>
-          </button>
+          {/* Footer Links */}
+          <div className="space-y-1">
+            <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
+              <MessageSquare size={18} />
+              {isOpen && <span>Feedback</span>}
+            </button>
+            <Link
+              to="/settings"
+              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+            >
+              <Settings size={18} />
+              {isOpen && <span>Settings</span>}
+            </Link>
+            <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
+              <Info size={18} />
+              {isOpen && <span>Help Center</span>}
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+            >
+              <LogOut size={18} />
+              {isOpen && <span>Sign Out</span>}
+            </button>
+          </div>
         </div>
       </div>
     </aside>
