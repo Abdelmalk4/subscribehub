@@ -8,18 +8,26 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  ChevronLeft,
-  Zap,
+  Search,
+  Bell,
+  Sparkles,
+  MessageSquare,
   Shield,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { differenceInDays } from "date-fns";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+  badge?: number;
 }
 
 const clientNavItems: NavItem[] = [
@@ -44,12 +52,49 @@ interface SidebarProps {
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
+interface Subscription {
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  subscription_plans: {
+    plan_name: string;
+    max_projects: number;
+    max_subscribers: number;
+  } | null;
+}
+
 export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
+
+  useEffect(() => {
+    if (user && !isAdmin) {
+      fetchSubscription();
+    }
+  }, [user, isAdmin]);
+
+  const fetchSubscription = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("client_subscriptions")
+      .select(`
+        status,
+        trial_ends_at,
+        current_period_end,
+        subscription_plans (
+          plan_name,
+          max_projects,
+          max_subscribers
+        )
+      `)
+      .eq("client_id", user.id)
+      .maybeSingle();
+    setSubscription(data as Subscription | null);
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -57,49 +102,55 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
     navigate("/login");
   };
 
-  // Get user initials
-  const getInitials = () => {
-    const email = user?.email || "";
-    const name = user?.user_metadata?.full_name || email;
-    if (name.includes(" ")) {
-      const parts = name.split(" ");
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  const getSubscriptionInfo = () => {
+    if (!subscription) {
+      return { planName: "Free Trial", daysLeft: 14, progress: 0 };
     }
-    return name.substring(0, 2).toUpperCase();
+    const planName = subscription.subscription_plans?.plan_name || "Free Trial";
+    const endDate = subscription.trial_ends_at || subscription.current_period_end;
+    if (!endDate) {
+      return { planName, daysLeft: 0, progress: 100 };
+    }
+    const daysLeft = Math.max(0, differenceInDays(new Date(endDate), new Date()));
+    const totalDays = subscription.status === "trial" ? 14 : 30;
+    const progress = Math.round(((totalDays - daysLeft) / totalDays) * 100);
+    return { planName, daysLeft, progress };
   };
 
-  const getDisplayName = () => {
-    return user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
-  };
-
-  const handleNavClick = () => {
-    // Collapse sidebar when clicking a nav link
-    onCollapsedChange?.(true);
-  };
+  const { daysLeft, progress } = getSubscriptionInfo();
 
   return (
-    <aside
-      className={cn(
-        "sticky top-0 z-30 h-screen transition-all duration-300 shrink-0",
-        collapsed ? "w-20" : "w-64"
-      )}
-      onMouseEnter={() => onCollapsedChange?.(false)}
-      onMouseLeave={() => onCollapsedChange?.(true)}
-    >
-      <div className="h-full m-3 flex flex-col bg-card/40 backdrop-blur-2xl border border-border/30 rounded-2xl shadow-2xl overflow-hidden">
-        {/* Logo Section */}
-        <div className="p-4 border-b border-border/30">
-          <Link to="/dashboard" className="flex items-center gap-3" onClick={handleNavClick}>
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm">
-              <Zap className="h-5 w-5 text-primary-foreground" />
+    <aside className="sticky top-0 z-30 h-screen w-60 shrink-0 border-r border-border bg-card">
+      <div className="h-full flex flex-col">
+        {/* Logo */}
+        <div className="h-14 flex items-center px-4 border-b border-border">
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-foreground flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-background" />
             </div>
-            {!collapsed && (
-              <div className="flex flex-col">
-                <span className="text-lg font-bold text-foreground">SubscribeHub</span>
-                <span className="text-xs text-muted-foreground">Telegram Monetization</span>
-              </div>
-            )}
+            <span className="font-semibold text-foreground">SubscribeHub</span>
           </Link>
+        </div>
+
+        {/* Search */}
+        <div className="p-3">
+          <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+            <Search className="h-4 w-4" />
+            <span>Search...</span>
+            <kbd className="ml-auto text-xs bg-background px-1.5 py-0.5 rounded border border-border">⌘K</kbd>
+          </button>
+        </div>
+
+        {/* Quick Links */}
+        <div className="px-3 space-y-1">
+          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
+            <Bell className="h-4 w-4" />
+            <span>Notifications</span>
+          </button>
+          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
+            <MessageSquare className="h-4 w-4" />
+            <span>AI Assistant</span>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -112,54 +163,76 @@ export function Sidebar({ isAdmin = false, collapsed = false, onCollapsedChange 
               <Link
                 key={item.href}
                 to={item.href}
-                onClick={handleNavClick}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                   isActive
-                    ? "bg-primary/10 text-primary border-l-2 border-primary"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    ? "bg-muted text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                 )}
               >
-                <Icon className={cn(
-                  "h-5 w-5 transition-transform duration-200",
-                  isActive && "scale-110"
-                )} />
-                {!collapsed && (
-                  <span className="font-medium">{item.label}</span>
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span className="ml-auto bg-destructive text-destructive-foreground text-xs px-1.5 py-0.5 rounded-full">
+                    {item.badge}
+                  </span>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* User Section */}
-        <div className="p-4 border-t border-border/30">
-          <div className={cn(
-            "flex items-center gap-3 p-3 rounded-xl bg-muted/30",
-            collapsed && "justify-center"
-          )}>
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-secondary/50 flex items-center justify-center">
-              <span className="text-sm font-semibold text-foreground">{getInitials()}</span>
-            </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{getDisplayName()}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+        {/* Subscription Card */}
+        {!isAdmin && (
+          <div className="p-3">
+            <div className="p-3 bg-muted/50 rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-foreground">{daysLeft} Days Left!</span>
+                <button 
+                  onClick={() => navigate("/billing")}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <span className="sr-only">Close</span>
+                  ×
+                </button>
               </div>
-            )}
+              <Progress value={100 - progress} className="h-1.5 mb-2" />
+              <p className="text-xs text-muted-foreground mb-3">
+                Select a plan and unlock unlimited premium features.
+              </p>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="w-full justify-between"
+                onClick={() => navigate("/billing")}
+              >
+                Select plan
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full mt-2 text-muted-foreground hover:text-destructive",
-              collapsed && "px-0"
-            )}
+        )}
+
+        {/* Footer Links */}
+        <div className="p-3 border-t border-border space-y-1">
+          <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors">
+            <MessageSquare className="h-4 w-4" />
+            <span>Feedback</span>
+          </button>
+          <Link
+            to="/settings"
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-lg transition-colors"
+          >
+            <Settings className="h-4 w-4" />
+            <span>Settings</span>
+          </Link>
+          <button
             onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">Sign Out</span>}
-          </Button>
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </aside>

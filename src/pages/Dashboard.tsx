@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -272,208 +273,137 @@ export default function Dashboard() {
     );
   }
 
-  const { planName, daysLeft, progress } = getSubscriptionInfo();
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Welcome back, {userName}! 👋</h1>
-          <p className="text-muted-foreground mt-1">Here's what's happening with your channels today.</p>
+          <h1 className="text-2xl font-semibold text-foreground">Welcome back, {userName}! 👋</h1>
+          <p className="text-muted-foreground text-sm mt-1">Here's what's happening with your channels today.</p>
         </div>
-        <Link to="/projects">
-          <Button variant="gradient" className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Project
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm">
+            Export
           </Button>
-        </Link>
+          <Link to="/projects">
+            <Button size="sm" className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Subscription Status Card - Span 2 columns on large screens */}
-        <Card variant="glow" className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Crown className="h-5 w-5 text-warning" />
-                Your Subscription
-              </CardTitle>
-              <Badge variant={subscription?.status === "active" ? "success" : "warning"}>
-                <span className="h-1.5 w-1.5 rounded-full bg-current mr-1.5 animate-pulse" />
-                {planName}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                {subscription?.status === "trial" ? "Trial ends in" : "Renews in"}
-              </span>
-              <span className="font-semibold text-foreground">{daysLeft} days</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-            
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Projects Used</p>
-                <p className="text-lg font-semibold text-foreground">
-                  {stats.projectsUsed} <span className="text-muted-foreground text-sm font-normal">/ {stats.projectsLimit}</span>
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Subscribers Used</p>
-                <p className="text-lg font-semibold text-foreground">
-                  {stats.subscribersUsed} <span className="text-muted-foreground text-sm font-normal">/ {stats.subscribersLimit}</span>
-                </p>
-              </div>
-            </div>
-
-            <Link to="/billing">
-              <Button variant="glass-primary" className="w-full mt-2">
-                <Zap className="h-4 w-4 mr-2" />
-                Upgrade Plan
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card variant="glass">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Link to="/projects" className="block">
-              <Button variant="glass" className="w-full justify-start gap-3">
-                <FolderOpen className="h-4 w-4 text-primary" />
-                Create New Project
-              </Button>
-            </Link>
-            <Link to="/subscribers" className="block">
-              <Button variant="glass" className="w-full justify-start gap-3">
-                <Users className="h-4 w-4 text-secondary" />
-                Manage Subscribers
-              </Button>
-            </Link>
-            <Link to="/analytics" className="block">
-              <Button variant="glass" className="w-full justify-start gap-3">
-                <TrendingUp className="h-4 w-4 text-success" />
-                View Analytics
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Revenue Card */}
-        <Card variant="glass-hover">
+        <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="h-12 w-12 rounded-xl bg-success/20 flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-success" />
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-foreground" />
               </div>
-              <Badge variant={stats.revenueChange >= 0 ? "success" : "error"} className="gap-1">
-                {stats.revenueChange >= 0 ? (
-                  <ArrowUpRight className="h-3 w-3" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3" />
-                )}
-                {stats.revenueChange >= 0 ? "+" : ""}{stats.revenueChange}%
-              </Badge>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-foreground">
-                ${stats.revenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-sm text-muted-foreground">Revenue this month</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Revenue</p>
+                <p className="text-2xl font-semibold text-foreground">
+                  ${stats.revenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Active Subscribers Card */}
-        <Card variant="glass-hover">
+        {/* Projects Card */}
+        <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Users className="h-6 w-6 text-primary" />
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <FolderOpen className="h-5 w-5 text-foreground" />
               </div>
-              <Badge variant="info" className="gap-1">
-                <ArrowUpRight className="h-3 w-3" />
-                +{stats.subscriberChange}
-              </Badge>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-foreground">{stats.activeSubscribers}</p>
-              <p className="text-sm text-muted-foreground">Active subscribers</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Active Projects</p>
+                <p className="text-2xl font-semibold text-foreground">{stats.projectsUsed}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Expiring Soon Card */}
-        <Card variant="glass-hover">
+        {/* Subscribers Card */}
+        <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div className="h-12 w-12 rounded-xl bg-warning/20 flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-warning" />
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <Users className="h-5 w-5 text-foreground" />
               </div>
-              <Badge variant="warning">
-                <Clock className="h-3 w-3 mr-1" />
-                next 7 days
-              </Badge>
-            </div>
-            <div className="mt-4">
-              <p className="text-3xl font-bold text-foreground">{stats.expiringSoon}</p>
-              <p className="text-sm text-muted-foreground">Expiring soon</p>
+              <div>
+                <p className="text-sm text-muted-foreground">Active Subscribers</p>
+                <p className="text-2xl font-semibold text-foreground">{stats.activeSubscribers}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Activity - Span full width */}
-        <Card variant="glass" className="md:col-span-2 lg:col-span-3">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Recent Activity</CardTitle>
-              <Link to="/subscribers">
-                <Button variant="ghost" size="sm" className="text-primary">
-                  View All
-                </Button>
-              </Link>
+        {/* Expiring Card */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                <Clock className="h-5 w-5 text-foreground" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Expiring Soon</p>
+                <p className="text-2xl font-semibold text-foreground">{stats.expiringSoon}</p>
+              </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {recentActivity.length > 0 ? (
-              <div className="space-y-4">
-                {recentActivity.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`h-2 w-2 rounded-full ${
-                        activity.type === "subscription" ? "bg-success" :
-                        activity.type === "payment" ? "bg-primary" :
-                        "bg-warning"
-                      }`} />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{activity.message}</p>
-                        <p className="text-xs text-muted-foreground">{activity.project}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{activity.time}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No recent activity yet</p>
-                <p className="text-sm">Create a project to get started!</p>
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Activity */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
+            <Link to="/subscribers">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                View All
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recentActivity.length > 0 ? (
+            <div className="space-y-3">
+              {recentActivity.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="flex items-center justify-between py-2 border-b border-border last:border-0"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "h-2 w-2 rounded-full",
+                      activity.type === "subscription" ? "bg-success" :
+                      activity.type === "payment" ? "bg-warning" :
+                      "bg-muted-foreground"
+                    )} />
+                    <div>
+                      <p className="text-sm text-foreground">{activity.message}</p>
+                      <p className="text-xs text-muted-foreground">{activity.project}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{activity.time}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-10 w-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No recent activity yet</p>
+              <p className="text-xs">Create a project to get started!</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
