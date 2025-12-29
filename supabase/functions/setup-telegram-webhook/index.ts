@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,60 @@ serve(async (req) => {
   }
 
   try {
+    // Verify JWT and get user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("Missing Authorization header");
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // Create client with user's JWT to verify auth
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { bot_token, project_id }: SetupWebhookRequest = await req.json();
+
+    // Verify user owns the project
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("id, user_id")
+      .eq("id", project_id)
+      .single();
+
+    if (projectError || !project) {
+      console.error("Project not found:", projectError);
+      return new Response(
+        JSON.stringify({ success: false, error: "Project not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (project.user_id !== user.id) {
+      console.error("User does not own this project");
+      return new Response(
+        JSON.stringify({ success: false, error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+
+    }
 
     if (!bot_token || !project_id) {
       console.error("Missing required parameters");
@@ -38,8 +92,7 @@ serve(async (req) => {
       );
     }
 
-    // Construct the webhook URL for this project
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    console.log(`User ${user.id} setting up webhook for project ${project_id}`);
     const webhookUrl = `${supabaseUrl}/functions/v1/telegram-bot-handler?project_id=${project_id}`;
     
     // Generate the secret token for webhook authentication
