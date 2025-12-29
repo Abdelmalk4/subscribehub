@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Search,
-  Filter,
   Download,
   Plus,
   MoreHorizontal,
@@ -47,19 +46,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
-  UserCheck,
-  UserX,
   AlertCircle,
   RefreshCw,
   CalendarPlus,
   Hash,
+  ChevronDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, subDays } from "date-fns";
 import { SubscriberDetails } from "@/components/subscribers/SubscriberDetails";
 import { AddSubscriberDialog } from "@/components/subscribers/AddSubscriberDialog";
+import { SubscriberMetrics } from "@/components/subscribers/SubscriberMetrics";
+import { SmartFilters } from "@/components/subscribers/SmartFilters";
+import { BulkActionsBar } from "@/components/subscribers/BulkActionsBar";
+import { EmptyState } from "@/components/subscribers/EmptyState";
+import { motion } from "framer-motion";
 
 interface Subscriber {
   id: string;
@@ -97,6 +100,9 @@ interface Stats {
   pending_approval: number;
   awaiting_proof: number;
   expired: number;
+  expiring_soon: number;
+  churn_rate: number;
+  mrr: number;
 }
 
 const statusConfig: Record<string, { label: string; variant: "success" | "warning" | "pending" | "muted" | "destructive" }> = {
@@ -115,11 +121,24 @@ export default function Subscribers() {
   const { user } = useAuth();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [stats, setStats] = useState<Stats>({ active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 });
+  const [stats, setStats] = useState<Stats>({ 
+    active: 0, 
+    pending_approval: 0, 
+    awaiting_proof: 0, 
+    expired: 0,
+    expiring_soon: 0,
+    churn_rate: 0,
+    mrr: 0
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined
+  });
+  const [quickFilter, setQuickFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -131,6 +150,7 @@ export default function Subscribers() {
   const [activeTab, setActiveTab] = useState("all");
   const [isCheckingMembership, setIsCheckingMembership] = useState<Set<string>>(new Set());
   const [quickExtendDays, setQuickExtendDays] = useState<Record<string, string>>({});
+  const [metricsFilter, setMetricsFilter] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     const { data } = await supabase
@@ -142,15 +162,66 @@ export default function Subscribers() {
 
   const fetchStats = async () => {
     const statuses = ["active", "pending_approval", "awaiting_proof", "expired"];
-    const newStats: Stats = { active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 };
+    const newStats: Stats = { 
+      active: 0, 
+      pending_approval: 0, 
+      awaiting_proof: 0, 
+      expired: 0,
+      expiring_soon: 0,
+      churn_rate: 0,
+      mrr: 0
+    };
 
+    // Fetch basic status counts
     for (const status of statuses) {
       const { count } = await supabase
         .from("subscribers")
         .select("*", { count: "exact", head: true })
         .eq("status", status as any);
-      newStats[status as keyof Stats] = count || 0;
+      newStats[status as keyof Pick<Stats, "active" | "pending_approval" | "awaiting_proof" | "expired">] = count || 0;
     }
+
+    // Fetch expiring soon (within 7 days)
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+    const { count: expiringCount } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "active")
+      .lte("expiry_date", sevenDaysFromNow.toISOString())
+      .gte("expiry_date", new Date().toISOString());
+    newStats.expiring_soon = expiringCount || 0;
+
+    // Calculate churn rate (expired in last 30 days / total active 30 days ago)
+    const thirtyDaysAgo = subDays(new Date(), 30);
+    const { count: recentlyExpired } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "expired")
+      .gte("expiry_date", thirtyDaysAgo.toISOString());
+    
+    const totalActiveAndExpired = (newStats.active || 0) + (recentlyExpired || 0);
+    newStats.churn_rate = totalActiveAndExpired > 0 
+      ? ((recentlyExpired || 0) / totalActiveAndExpired) * 100 
+      : 0;
+
+    // Calculate MRR from active subscribers with plans
+    const { data: activeWithPlans } = await supabase
+      .from("subscribers")
+      .select("plans(price, duration_days)")
+      .eq("status", "active");
+    
+    if (activeWithPlans) {
+      newStats.mrr = activeWithPlans.reduce((sum, sub) => {
+        if (sub.plans) {
+          // Convert to monthly rate
+          const monthlyRate = (sub.plans.price / sub.plans.duration_days) * 30;
+          return sum + monthlyRate;
+        }
+        return sum;
+      }, 0);
+    }
+
     setStats(newStats);
   };
 
@@ -170,18 +241,70 @@ export default function Subscribers() {
       // Apply tab-based filter
       if (activeTab === "active") {
         query = query.eq("status", "active");
-      } else {
-        // Apply manual status filter only for "all" tab
-        if (statusFilter !== "all") {
-          query = query.eq("status", statusFilter as any);
+      } else if (metricsFilter) {
+        // Apply metrics card filter
+        if (metricsFilter === "expiring_soon") {
+          const sevenDaysFromNow = new Date();
+          sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+          query = query
+            .eq("status", "active")
+            .lte("expiry_date", sevenDaysFromNow.toISOString())
+            .gte("expiry_date", new Date().toISOString());
+        } else {
+          query = query.eq("status", metricsFilter as any);
+        }
+      } else if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter as any);
+      }
+
+      // Apply quick filters
+      if (quickFilter) {
+        const now = new Date();
+        switch (quickFilter) {
+          case "expiring_7d":
+            const sevenDaysFromNow = new Date();
+            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+            query = query
+              .eq("status", "active")
+              .lte("expiry_date", sevenDaysFromNow.toISOString())
+              .gte("expiry_date", now.toISOString());
+            break;
+          case "pending_3d":
+            const threeDaysAgo = subDays(now, 3);
+            query = query
+              .in("status", ["pending_approval", "awaiting_proof"])
+              .lte("created_at", threeDaysAgo.toISOString());
+            break;
+          case "not_in_channel":
+            query = query
+              .eq("status", "active")
+              .eq("channel_joined", false);
+            break;
+          case "high_value":
+            // Will filter client-side for plans > $50
+            break;
+          case "new_today":
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            query = query.gte("created_at", startOfDay.toISOString());
+            break;
         }
       }
       
       if (projectFilter !== "all") {
         query = query.eq("project_id", projectFilter);
       }
+      
       if (searchQuery) {
         query = query.or(`username.ilike.%${searchQuery}%,first_name.ilike.%${searchQuery}%,telegram_user_id.eq.${parseInt(searchQuery) || 0}`);
+      }
+
+      // Date range filter
+      if (dateRange.from) {
+        query = query.gte("created_at", dateRange.from.toISOString());
+      }
+      if (dateRange.to) {
+        query = query.lte("created_at", dateRange.to.toISOString());
       }
 
       // Pagination
@@ -196,14 +319,21 @@ export default function Subscribers() {
 
       if (error) throw error;
 
-      setSubscribers(data || []);
-      setTotalCount(count || 0);
+      let filteredData = data || [];
+      
+      // Client-side filter for high value
+      if (quickFilter === "high_value") {
+        filteredData = filteredData.filter(s => s.plans && s.plans.price >= 50);
+      }
+
+      setSubscribers(filteredData);
+      setTotalCount(quickFilter === "high_value" ? filteredData.length : (count || 0));
     } catch (error: any) {
       toast.error("Failed to load subscribers", { description: error.message });
     } finally {
       setIsLoading(false);
     }
-  }, [user, statusFilter, projectFilter, searchQuery, page, pageSize, activeTab]);
+  }, [user, statusFilter, projectFilter, searchQuery, page, pageSize, activeTab, quickFilter, dateRange, metricsFilter]);
 
   useEffect(() => {
     fetchProjects();
@@ -217,7 +347,18 @@ export default function Subscribers() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, projectFilter, searchQuery, activeTab]);
+  }, [statusFilter, projectFilter, searchQuery, activeTab, quickFilter, dateRange, metricsFilter]);
+
+  // Calculate selected statuses for bulk actions
+  const selectedStatuses = useMemo(() => {
+    const result: Record<string, number> = {};
+    subscribers
+      .filter(s => selectedIds.has(s.id))
+      .forEach(s => {
+        result[s.status] = (result[s.status] || 0) + 1;
+      });
+    return result;
+  }, [subscribers, selectedIds]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -307,7 +448,7 @@ export default function Subscribers() {
       const activeSubscribers = subscribers.filter(s => ids.includes(s.id) && s.status === "active");
       
       for (const sub of activeSubscribers) {
-        const days = 30; // Default 30 days for bulk extend
+        const days = 30;
         let baseDate: Date;
         if (sub.expiry_date) {
           const currentExpiry = new Date(sub.expiry_date);
@@ -329,7 +470,6 @@ export default function Subscribers() {
           .eq("id", sub.id)
           .eq("status", "active");
 
-        // Notify subscriber
         await supabase.functions.invoke("notify-subscriber", {
           body: {
             subscriber_id: sub.id,
@@ -388,7 +528,7 @@ export default function Subscribers() {
     const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
     if (!allowedStatuses.includes(subscriber.status)) {
       toast.error("Cannot approve subscriber", { 
-        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
+        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status.` 
       });
       return;
     }
@@ -419,7 +559,7 @@ export default function Subscribers() {
       }
 
       try {
-        const { data: notifyData, error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
+        const { error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
           body: {
             subscriber_id: subscriber.id,
             action: "approved",
@@ -428,19 +568,12 @@ export default function Subscribers() {
         });
 
         if (notifyError) {
-          console.error("Notification error:", notifyError);
-          toast.warning("Approved but notification failed", { 
-            description: "Subscriber approved but could not send Telegram notification." 
-          });
+          toast.warning("Approved but notification failed");
         } else {
-          console.log("Notification sent:", notifyData);
           toast.success("Subscriber approved and notified!");
         }
-      } catch (notifyErr: any) {
-        console.error("Notification exception:", notifyErr);
-        toast.warning("Approved but notification failed", { 
-          description: notifyErr.message 
-        });
+      } catch {
+        toast.warning("Approved but notification failed");
       }
 
       fetchSubscribers();
@@ -453,9 +586,7 @@ export default function Subscribers() {
   const handleQuickReject = async (subscriber: Subscriber) => {
     const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
     if (!allowedStatuses.includes(subscriber.status)) {
-      toast.error("Cannot reject subscriber", { 
-        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
-      });
+      toast.error("Cannot reject subscriber");
       return;
     }
 
@@ -468,32 +599,18 @@ export default function Subscribers() {
 
       if (error) throw error;
       if (count === 0) {
-        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        toast.error("Subscriber status changed");
         fetchSubscribers();
         return;
       }
 
       try {
-        const { error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: subscriber.id,
-            action: "rejected",
-          },
+        await supabase.functions.invoke("notify-subscriber", {
+          body: { subscriber_id: subscriber.id, action: "rejected" },
         });
-
-        if (notifyError) {
-          console.error("Notification error:", notifyError);
-          toast.warning("Rejected but notification failed", { 
-            description: "Subscriber rejected but could not send Telegram notification." 
-          });
-        } else {
-          toast.success("Subscriber rejected and notified");
-        }
-      } catch (notifyErr: any) {
-        console.error("Notification exception:", notifyErr);
-        toast.warning("Rejected but notification failed", { 
-          description: notifyErr.message 
-        });
+        toast.success("Subscriber rejected and notified");
+      } catch {
+        toast.warning("Rejected but notification failed");
       }
 
       fetchSubscribers();
@@ -505,9 +622,7 @@ export default function Subscribers() {
 
   const handleQuickExtend = async (subscriber: Subscriber) => {
     if (subscriber.status !== "active") {
-      toast.error("Cannot extend subscription", { 
-        description: `Subscriber must be 'Active' to extend. Current status: ${subscriber.status}` 
-      });
+      toast.error("Cannot extend - subscriber must be active");
       return;
     }
 
@@ -541,12 +656,11 @@ export default function Subscribers() {
 
       if (error) throw error;
       if (count === 0) {
-        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
+        toast.error("Subscriber status changed");
         fetchSubscribers();
         return;
       }
 
-      // Notify subscriber about the extension
       try {
         await supabase.functions.invoke("notify-subscriber", {
           body: {
@@ -555,10 +669,8 @@ export default function Subscribers() {
             expiry_date: newExpiry.toISOString(),
           },
         });
-        toast.success(`Extended by ${days} days`, {
-          description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}`,
-        });
-      } catch (notifyErr: any) {
+        toast.success(`Extended by ${days} days`);
+      } catch {
         toast.warning("Extended but notification failed");
       }
 
@@ -573,10 +685,7 @@ export default function Subscribers() {
     
     try {
       const { data, error } = await supabase.functions.invoke("check-channel-membership", {
-        body: {
-          subscriber_id: subscriber.id,
-          update_database: true,
-        },
+        body: { subscriber_id: subscriber.id, update_database: true },
       });
 
       if (error) throw error;
@@ -584,13 +693,9 @@ export default function Subscribers() {
       const result = data?.results?.[0];
       if (result) {
         if (result.is_member) {
-          toast.success("User is in the channel", {
-            description: `Status: ${result.status}`,
-          });
+          toast.success("User is in the channel");
         } else {
-          toast.warning("User is NOT in the channel", {
-            description: `Status: ${result.status}`,
-          });
+          toast.warning("User is NOT in the channel");
         }
         fetchSubscribers();
       }
@@ -603,6 +708,27 @@ export default function Subscribers() {
         return next;
       });
     }
+  };
+
+  const handleMetricsFilterClick = (filter: string) => {
+    if (metricsFilter === filter) {
+      setMetricsFilter(null);
+      setActiveTab("all");
+      setStatusFilter("all");
+    } else {
+      setMetricsFilter(filter);
+      setActiveTab("all");
+      setQuickFilter(null);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setStatusFilter("all");
+    setProjectFilter("all");
+    setDateRange({ from: undefined, to: undefined });
+    setQuickFilter(null);
+    setSearchQuery("");
+    setMetricsFilter(null);
   };
 
   const getExpiryInfo = (expiryDate: string | null) => {
@@ -659,11 +785,6 @@ export default function Subscribers() {
             </TooltipTrigger>
             <TooltipContent>
               <p>Status: {status || "not in channel"}</p>
-              {subscriber.last_membership_check && (
-                <p className="text-xs text-muted-foreground">
-                  Checked: {format(new Date(subscriber.last_membership_check), "MMM d, HH:mm")}
-                </p>
-              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -690,11 +811,12 @@ export default function Subscribers() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : subscribers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <Users className="h-12 w-12 mb-2 opacity-50" />
-            <p>No subscribers found</p>
-            <p className="text-sm">Try adjusting your filters</p>
-          </div>
+          <EmptyState 
+            type={searchQuery || statusFilter !== "all" || projectFilter !== "all" || quickFilter ? "no-results" : "no-subscribers"}
+            onAddSubscriber={() => setAddDialogOpen(true)}
+            onClearFilters={clearAllFilters}
+            onRefresh={fetchSubscribers}
+          />
         ) : (
           <>
             <Table>
@@ -726,13 +848,16 @@ export default function Subscribers() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subscribers.map((subscriber) => {
+                {subscribers.map((subscriber, index) => {
                   const status = statusConfig[subscriber.status] || { label: subscriber.status, variant: "muted" };
                   const expiryInfo = getExpiryInfo(subscriber.expiry_date);
                   
                   return (
-                    <TableRow
+                    <motion.tr
                       key={subscriber.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.02 }}
                       className={`border-border/30 hover:bg-muted/30 ${
                         selectedIds.has(subscriber.id) ? "bg-primary/5" : ""
                       } ${subscriber.channel_joined === false && subscriber.status === "active" ? "bg-destructive/5" : ""}`}
@@ -741,7 +866,6 @@ export default function Subscribers() {
                         <Checkbox
                           checked={selectedIds.has(subscriber.id)}
                           onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
-                          aria-label={`Select ${subscriber.username || subscriber.first_name}`}
                         />
                       </TableCell>
                       <TableCell>
@@ -814,7 +938,6 @@ export default function Subscribers() {
                               value={quickExtendDays[subscriber.id] || "30"}
                               onChange={(e) => setQuickExtendDays(prev => ({ ...prev, [subscriber.id]: e.target.value }))}
                               className="w-16 h-8 text-xs"
-                              placeholder="Days"
                             />
                             <Button
                               variant="outline"
@@ -880,7 +1003,7 @@ export default function Subscribers() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
-                    </TableRow>
+                    </motion.tr>
                   );
                 })}
               </TableBody>
@@ -936,76 +1059,58 @@ export default function Subscribers() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Subscribers</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage all your channel subscribers in one place.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="glass" className="gap-2" onClick={handleExportCSV}>
-            <Download className="h-4 w-4" />
-            Export {selectedIds.size > 0 && `(${selectedIds.size})`}
-          </Button>
-          <Button variant="gradient" className="gap-2" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Add Subscriber
-          </Button>
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg -mx-6 px-6 py-4 border-b border-border/30">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+              <span>Dashboard</span>
+              <ChevronDown className="h-3 w-3 rotate-[-90deg]" />
+              <span className="text-foreground">Subscribers</span>
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Subscriber Management
+              <Badge variant="secondary" className="ml-3 text-sm font-normal">
+                {totalCount} total
+              </Badge>
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="glass" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  Export
+                  {selectedIds.size > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                      {selectedIds.size}
+                    </Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="glass-menu">
+                <DropdownMenuItem onClick={handleExportCSV}>
+                  Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="gradient" className="gap-2" onClick={() => setAddDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add Subscriber
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card variant="glass" className="cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setActiveTab("active"); setStatusFilter("all"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-success/20 flex items-center justify-center">
-              <UserCheck className="h-5 w-5 text-success" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{stats.active}</p>
-              <p className="text-xs text-muted-foreground">Active</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("pending_approval"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-warning/20 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-warning" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-warning">{stats.pending_approval}</p>
-              <p className="text-xs text-muted-foreground">Pending Approval</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-secondary/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("awaiting_proof"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-              <AlertCircle className="h-5 w-5 text-secondary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-secondary">{stats.awaiting_proof}</p>
-              <p className="text-xs text-muted-foreground">Awaiting Proof</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-muted-foreground/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("expired"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center">
-              <UserX className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-muted-foreground">{stats.expired}</p>
-              <p className="text-xs text-muted-foreground">Expired</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Metrics Dashboard */}
+      <SubscriberMetrics 
+        stats={stats} 
+        activeFilter={metricsFilter}
+        onFilterClick={handleMetricsFilterClick}
+      />
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      {/* Tabs & Content */}
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setMetricsFilter(null); }} className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="all" className="gap-2">
             <Users className="h-4 w-4" />
@@ -1021,107 +1126,36 @@ export default function Subscribers() {
         </TabsList>
 
         {/* Bulk Actions Bar */}
-        {selectedIds.size > 0 && (
-          <Card className="bg-primary/10 border-primary/30 mt-4">
-            <CardContent className="py-3 flex items-center justify-between">
-              <span className="text-sm text-foreground">
-                {selectedIds.size} subscriber(s) selected
-              </span>
-              <div className="flex gap-2">
-                {activeTab === "all" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 bg-success/20 border-success/30 text-success hover:bg-success/30"
-                      onClick={handleBulkApprove}
-                      disabled={isProcessingBulk}
-                    >
-                      {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 bg-destructive/20 border-destructive/30 text-destructive hover:bg-destructive/30"
-                      onClick={handleBulkReject}
-                      disabled={isProcessingBulk}
-                    >
-                      {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                      Reject
-                    </Button>
-                  </>
-                )}
-                {activeTab === "active" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
-                    onClick={handleBulkExtend}
-                    disabled={isProcessingBulk}
-                  >
-                    {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
-                    Extend 30 Days
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  Clear
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        <div className="mt-4">
+          <BulkActionsBar
+            selectedCount={selectedIds.size}
+            selectedStatuses={selectedStatuses}
+            isProcessing={isProcessingBulk}
+            onApprove={handleBulkApprove}
+            onReject={handleBulkReject}
+            onExtend={handleBulkExtend}
+            onClear={() => setSelectedIds(new Set())}
+            activeTab={activeTab}
+          />
+        </div>
 
-        {/* Filters */}
-        <Card variant="glass" className="mt-4">
-          <CardContent className="pt-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by username, name, or Telegram ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              {activeTab === "all" && (
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full md:w-[180px] bg-card/30 border-border/50">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent className="glass-menu">
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending_approval">Pending Approval</SelectItem>
-                    <SelectItem value="pending_payment">Pending Payment</SelectItem>
-                    <SelectItem value="awaiting_proof">Awaiting Proof</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-full md:w-[200px] bg-card/30 border-border/50">
-                  <SelectValue placeholder="Project" />
-                </SelectTrigger>
-                <SelectContent className="glass-menu">
-                  <SelectItem value="all">All Projects</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.project_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Smart Filters */}
+        <div className="mt-4">
+          <SmartFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusChange={setStatusFilter}
+            projectFilter={projectFilter}
+            onProjectChange={setProjectFilter}
+            projects={projects}
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            quickFilter={quickFilter}
+            onQuickFilterChange={setQuickFilter}
+            showStatusFilter={activeTab === "all"}
+          />
+        </div>
 
         <TabsContent value="all" className="mt-4">
           {renderSubscribersTable(false)}
