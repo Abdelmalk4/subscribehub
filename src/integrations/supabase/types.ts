@@ -115,6 +115,63 @@ export type Database = {
           },
         ]
       }
+      extend_requests: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_proof_url: string | null
+          project_id: string
+          requested_days: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          subscriber_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          project_id: string
+          requested_days?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subscriber_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          project_id?: string
+          requested_days?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extend_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extend_requests_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           created_at: string | null
