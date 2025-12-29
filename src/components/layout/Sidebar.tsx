@@ -226,23 +226,23 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         <div className="p-4 border-t border-border space-y-4">
           {/* Subscription Promo Card */}
           {!isAdmin && isOpen && (
-            <div className="bg-muted border border-border rounded-xl p-4 space-y-3">
+            <div className="bg-muted border border-border rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <div className="font-bold text-sm text-foreground">{daysLeft} Days Left!</div>
-                <span className="text-xs text-muted-foreground">{14 - Math.round((progress / 100) * 14)}/14 days</span>
+                <div className="font-semibold text-xs text-foreground">{daysLeft} Days Left!</div>
+                <span className="text-[10px] text-muted-foreground">{14 - Math.round((progress / 100) * 14)}/14 days</span>
               </div>
-              <Progress value={100 - progress} className="h-2" />
-              <p className="text-xs text-muted-foreground leading-relaxed">
+              <Progress value={100 - progress} className="h-1.5" />
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
                 Select a plan and unlock unlimited premium features.
               </p>
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="w-full justify-between text-xs font-semibold"
+                className="w-full justify-between text-[10px] font-medium h-7"
                 onClick={() => navigate("/billing")}
               >
                 Select plan
-                <ChevronRight size={14} />
+                <ChevronRight size={12} />
               </Button>
             </div>
           )}
