@@ -1190,28 +1190,53 @@ export default function Subscribers() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-3">
-          <TabsTrigger value="all" className="gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+              activeTab === "all"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted/80 text-muted-foreground hover:bg-muted"
+            }`}
+          >
             <Users className="h-4 w-4" />
             All Subscribers
-          </TabsTrigger>
-          <TabsTrigger value="active" className="gap-2">
+          </button>
+          <button
+            onClick={() => setActiveTab("active")}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+              activeTab === "active"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted/80 text-muted-foreground hover:bg-muted"
+            }`}
+          >
             <UserCheck className="h-4 w-4" />
             Active
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+            <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+              activeTab === "active" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"
+            }`}>
               {stats.active}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="extend_requests" className="gap-2">
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("extend_requests")}
+            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+              activeTab === "extend_requests"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted/80 text-muted-foreground hover:bg-muted"
+            }`}
+          >
             <CalendarPlus className="h-4 w-4" />
             Extend Requests
             {stats.extend_requests > 0 && (
-              <Badge variant="warning" className="ml-1 h-5 px-1.5 text-xs">
+              <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+                activeTab === "extend_requests" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-warning/20 text-warning"
+              }`}>
                 {stats.extend_requests}
-              </Badge>
+              </span>
             )}
-          </TabsTrigger>
-        </TabsList>
+          </button>
+        </div>
 
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
