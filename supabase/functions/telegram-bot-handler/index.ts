@@ -443,9 +443,6 @@ async function handleTextMessage(
     case "/renew":
       await handleRenew(supabase, project, userId, chatId, requestId);
       break;
-    case "/extend":
-      await handleExtend(supabase, project, userId, chatId, text, requestId);
-      break;
     case "/help":
       await handleHelp(project, chatId);
       break;
@@ -477,75 +474,24 @@ async function handlePhotoMessage(
     return;
   }
 
-  // Check if subscriber is awaiting proof for new subscription
-  const { data: awaitingProofSub } = await supabase
+  const { data: subscriber, error } = await supabase
     .from("subscribers")
     .select("*")
     .eq("project_id", project.id)
     .eq("telegram_user_id", userId)
     .eq("status", "awaiting_proof")
-    .maybeSingle();
+    .single();
 
-  // Check if there's a pending extend request awaiting proof
-  const { data: pendingExtendRequest } = await supabase
-    .from("extend_requests")
-    .select("*, subscribers!inner(id, telegram_user_id, project_id)")
-    .eq("project_id", project.id)
-    .eq("subscribers.telegram_user_id", userId)
-    .eq("status", "pending")
-    .is("payment_proof_url", null)
-    .maybeSingle();
-
-  if (!awaitingProofSub && !pendingExtendRequest) {
+  if (error || !subscriber) {
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      "❓ We received your photo, but you don't have a pending payment.\n\nUse /start to subscribe or /extend to request an extension."
+      "❓ We received your photo, but you don't have a pending payment.\n\nUse /start to subscribe or /status to check your subscription."
     );
     return;
   }
 
-  // Handle photo for extend request
-  if (pendingExtendRequest) {
-    await sendTelegramMessage(project.bot_token, chatId, "📸 Processing your extension payment proof...");
-
-    const { filePath } = await getTelegramFile(project.bot_token, fileId);
-    let paymentProofUrl: string | null = null;
-
-    if (filePath) {
-      const fileData = await downloadTelegramFile(project.bot_token, filePath);
-      if (fileData) {
-        paymentProofUrl = await uploadPaymentProof(supabase, project.id, pendingExtendRequest.subscriber_id, fileData, filePath);
-      }
-    }
-
-    // Update extend request with payment proof
-    await supabase
-      .from("extend_requests")
-      .update({
-        payment_proof_url: paymentProofUrl || `telegram_file:${fileId}`,
-      })
-      .eq("id", pendingExtendRequest.id);
-
-    if (paymentProofUrl) {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "✅ Extension payment proof uploaded!\n\nOur team will review your payment and extend your subscription shortly."
-      );
-      console.log(`[${requestId}] Extend request proof stored: ${paymentProofUrl}`);
-    } else {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "📸 Extension payment proof received!\n\nOur team will review and extend your subscription shortly."
-      );
-    }
-    return;
-  }
-
-  // Handle photo for new subscription (awaiting_proof status)
-  const sub = awaitingProofSub as Subscriber;
+  const sub = subscriber as Subscriber;
   await sendTelegramMessage(project.bot_token, chatId, "📸 Processing your payment proof...");
 
   // Get and download file
@@ -851,173 +797,8 @@ async function handleHelp(project: Project, chatId: number) {
   await sendTelegramMessage(
     project.bot_token,
     chatId,
-    `📚 <b>Available Commands</b>\n\n/start - View plans and get started\n/status - Check your subscription\n/renew - Renew or extend subscription\n/extend - Request subscription extension\n/help - Show this help message${supportInfo}`
+    `📚 <b>Available Commands</b>\n\n/start - View plans and get started\n/status - Check your subscription\n/renew - Renew or extend subscription\n/help - Show this help message${supportInfo}`
   );
-}
-
-async function handleExtend(
-  supabase: any,
-  project: Project,
-  userId: number,
-  chatId: number,
-  text: string,
-  requestId: string
-) {
-  // Check if user has an active subscription
-  const { data: subscriber } = await supabase
-    .from("subscribers")
-    .select("*, plans(*)")
-    .eq("project_id", project.id)
-    .eq("telegram_user_id", userId)
-    .single();
-
-  const sub = subscriber as Subscriber | null;
-
-  if (!sub) {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      "❌ You don't have a subscription yet.\n\nUse /start to subscribe first!"
-    );
-    return;
-  }
-
-  if (sub.status !== "active") {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      "❌ You need an active subscription to request an extension.\n\nUse /renew to renew your subscription."
-    );
-    return;
-  }
-
-  // Check if there's already a pending extend request
-  const { data: existingRequest } = await supabase
-    .from("extend_requests")
-    .select("*")
-    .eq("subscriber_id", sub.id)
-    .eq("status", "pending")
-    .maybeSingle();
-
-  if (existingRequest) {
-    if (!existingRequest.payment_proof_url) {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "📤 You have a pending extension request.\n\nPlease send your payment proof (screenshot) to complete it."
-      );
-    } else {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "🔄 You already have an extension request pending review.\n\nPlease wait for admin approval."
-      );
-    }
-    return;
-  }
-
-  // Parse days from command (e.g., /extend 30 or /extend 60)
-  const parts = text.split(" ");
-  let requestedDays = 30; // Default to 30 days
-  
-  if (parts.length > 1) {
-    const parsedDays = parseInt(parts[1]);
-    if (!isNaN(parsedDays) && parsedDays > 0 && parsedDays <= 365) {
-      requestedDays = parsedDays;
-    }
-  }
-
-  // Fetch available plans to show pricing
-  const { data: plans } = await supabase
-    .from("plans")
-    .select("*")
-    .eq("project_id", project.id)
-    .eq("is_active", true)
-    .order("duration_days", { ascending: true });
-
-  const typedPlans = (plans || []) as Plan[];
-  
-  // Find the best matching plan for the requested days
-  let matchingPlan = typedPlans.find(p => p.duration_days === requestedDays);
-  if (!matchingPlan && typedPlans.length > 0) {
-    matchingPlan = typedPlans.reduce((closest, plan) => {
-      return Math.abs(plan.duration_days - requestedDays) < Math.abs(closest.duration_days - requestedDays) 
-        ? plan 
-        : closest;
-    });
-  }
-
-  // Create the extend request
-  const { error: insertError } = await supabase
-    .from("extend_requests")
-    .insert({
-      subscriber_id: sub.id,
-      project_id: project.id,
-      status: "pending",
-      requested_days: requestedDays,
-      payment_method: "manual",
-    });
-
-  if (insertError) {
-    console.error(`[${requestId}] Failed to create extend request:`, insertError);
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      "❌ Failed to create extension request. Please try again later."
-    );
-    return;
-  }
-
-  // Fetch platform payment methods for instructions
-  const { data: paymentMethods } = await supabase
-    .from("platform_payment_methods")
-    .select("*")
-    .eq("is_active", true)
-    .order("display_order", { ascending: true });
-
-  let paymentInstructions = "";
-
-  if (paymentMethods && paymentMethods.length > 0) {
-    paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
-
-    for (const pm of paymentMethods) {
-      paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type})\n`;
-
-      const details = pm.details as Record<string, string>;
-      if (pm.method_type === "bank_transfer" && details) {
-        if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
-        if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
-        if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
-      } else if (pm.method_type === "crypto" && details) {
-        if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
-        if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
-      } else if (pm.method_type === "mobile_money" && details) {
-        if (details.provider) paymentInstructions += `📱 Provider: ${sanitizeForHTML(details.provider)}\n`;
-        if (details.phone_number) paymentInstructions += `📞 Number: ${details.phone_number}\n`;
-      }
-
-      if (pm.instructions) {
-        paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
-      }
-      paymentInstructions += "\n";
-    }
-  }
-
-  const currentExpiry = sub.expiry_date ? new Date(sub.expiry_date).toLocaleDateString() : "N/A";
-  const priceInfo = matchingPlan ? `\n💰 Estimated Price: $${matchingPlan.price}` : "";
-
-  await sendTelegramMessage(
-    project.bot_token,
-    chatId,
-    `📅 <b>Extension Request Created</b>\n\n` +
-    `Current expiry: ${currentExpiry}\n` +
-    `Requested extension: <b>${requestedDays} days</b>${priceInfo}\n\n` +
-    `${paymentInstructions}` +
-    `✅ After payment, send a screenshot of your payment confirmation here.\n\n` +
-    `<i>Tip: You can specify days like /extend 60 for 60 days.</i>`
-  );
-
-  console.log(`[${requestId}] Extend request created for subscriber ${sub.id}: ${requestedDays} days`);
 }
 
 async function handlePlanSelection(

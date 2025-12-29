@@ -87,28 +87,6 @@ interface Subscriber {
   plans?: { plan_name: string; price: number; currency: string | null; duration_days: number } | null;
 }
 
-interface ExtendRequest {
-  id: string;
-  subscriber_id: string;
-  project_id: string;
-  status: "pending" | "approved" | "rejected";
-  requested_days: number;
-  payment_method: string | null;
-  payment_proof_url: string | null;
-  notes: string | null;
-  created_at: string;
-  reviewed_at: string | null;
-  reviewed_by: string | null;
-  subscribers?: {
-    id: string;
-    telegram_user_id: number;
-    username: string | null;
-    first_name: string | null;
-    expiry_date: string | null;
-  } | null;
-  projects?: { project_name: string } | null;
-}
-
 interface Project {
   id: string;
   project_name: string;
@@ -119,7 +97,6 @@ interface Stats {
   pending_approval: number;
   awaiting_proof: number;
   expired: number;
-  extend_requests: number;
 }
 
 const statusConfig: Record<string, { label: string; variant: "success" | "warning" | "pending" | "muted" | "destructive" }> = {
@@ -137,11 +114,9 @@ const PAGE_SIZES = [25, 50, 100];
 export default function Subscribers() {
   const { user } = useAuth();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [extendRequests, setExtendRequests] = useState<ExtendRequest[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [stats, setStats] = useState<Stats>({ active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0, extend_requests: 0 });
+  const [stats, setStats] = useState<Stats>({ active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingExtendRequests, setIsLoadingExtendRequests] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -156,7 +131,6 @@ export default function Subscribers() {
   const [activeTab, setActiveTab] = useState("all");
   const [isCheckingMembership, setIsCheckingMembership] = useState<Set<string>>(new Set());
   const [quickExtendDays, setQuickExtendDays] = useState<Record<string, string>>({});
-  const [isProcessingExtendRequest, setIsProcessingExtendRequest] = useState<Set<string>>(new Set());
 
   const fetchProjects = async () => {
     const { data } = await supabase
@@ -168,57 +142,17 @@ export default function Subscribers() {
 
   const fetchStats = async () => {
     const statuses = ["active", "pending_approval", "awaiting_proof", "expired"];
-    const newStats: Stats = { active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0, extend_requests: 0 };
+    const newStats: Stats = { active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 };
 
     for (const status of statuses) {
       const { count } = await supabase
         .from("subscribers")
         .select("*", { count: "exact", head: true })
         .eq("status", status as any);
-      newStats[status as keyof typeof newStats] = count || 0;
+      newStats[status as keyof Stats] = count || 0;
     }
-
-    // Fetch pending extend requests count
-    const { count: extendCount } = await supabase
-      .from("extend_requests")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending");
-    newStats.extend_requests = extendCount || 0;
-
     setStats(newStats);
   };
-
-  const fetchExtendRequests = useCallback(async () => {
-    if (!user) return;
-
-    setIsLoadingExtendRequests(true);
-    try {
-      let query = supabase
-        .from("extend_requests")
-        .select(`
-          *,
-          subscribers!inner(id, telegram_user_id, username, first_name, expiry_date),
-          projects!inner(project_name)
-        `)
-        .eq("status", "pending");
-
-      if (projectFilter !== "all") {
-        query = query.eq("project_id", projectFilter);
-      }
-
-      query = query.order("created_at", { ascending: false });
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      setExtendRequests((data || []) as ExtendRequest[]);
-    } catch (error: any) {
-      toast.error("Failed to load extend requests", { description: error.message });
-    } finally {
-      setIsLoadingExtendRequests(false);
-    }
-  }, [user, projectFilter]);
 
   const fetchSubscribers = useCallback(async () => {
     if (!user) return;
@@ -277,12 +211,8 @@ export default function Subscribers() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "extend_requests") {
-      fetchExtendRequests();
-    } else {
-      fetchSubscribers();
-    }
-  }, [fetchSubscribers, fetchExtendRequests, activeTab]);
+    fetchSubscribers();
+  }, [fetchSubscribers]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -670,115 +600,6 @@ export default function Subscribers() {
       setIsCheckingMembership(prev => {
         const next = new Set(prev);
         next.delete(subscriber.id);
-        return next;
-      });
-    }
-  };
-
-  const handleApproveExtendRequest = async (request: ExtendRequest) => {
-    setIsProcessingExtendRequest(prev => new Set(prev).add(request.id));
-    
-    try {
-      const subscriber = request.subscribers;
-      if (!subscriber) throw new Error("Subscriber not found");
-
-      // Calculate new expiry date
-      let baseDate: Date;
-      if (subscriber.expiry_date) {
-        const currentExpiry = new Date(subscriber.expiry_date);
-        baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
-      } else {
-        baseDate = new Date();
-      }
-      
-      const newExpiry = new Date(baseDate);
-      newExpiry.setDate(newExpiry.getDate() + request.requested_days);
-
-      // Update subscriber's expiry date
-      const { error: updateError } = await supabase
-        .from("subscribers")
-        .update({
-          expiry_date: newExpiry.toISOString(),
-          expiry_reminder_sent: false,
-          final_reminder_sent: false,
-        })
-        .eq("id", subscriber.id);
-
-      if (updateError) throw updateError;
-
-      // Delete the extend request
-      const { error: deleteError } = await supabase
-        .from("extend_requests")
-        .delete()
-        .eq("id", request.id);
-
-      if (deleteError) throw deleteError;
-
-      // Notify subscriber
-      try {
-        await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: subscriber.id,
-            action: "extended",
-            expiry_date: newExpiry.toISOString(),
-          },
-        });
-      } catch (notifyErr) {
-        console.error("Notification failed:", notifyErr);
-      }
-
-      toast.success(`Extended by ${request.requested_days} days`, {
-        description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}`,
-      });
-
-      fetchExtendRequests();
-      fetchStats();
-    } catch (error: any) {
-      toast.error("Failed to approve extension", { description: error.message });
-    } finally {
-      setIsProcessingExtendRequest(prev => {
-        const next = new Set(prev);
-        next.delete(request.id);
-        return next;
-      });
-    }
-  };
-
-  const handleRejectExtendRequest = async (request: ExtendRequest) => {
-    setIsProcessingExtendRequest(prev => new Set(prev).add(request.id));
-    
-    try {
-      // Delete the extend request
-      const { error } = await supabase
-        .from("extend_requests")
-        .delete()
-        .eq("id", request.id);
-
-      if (error) throw error;
-
-      // Optionally notify subscriber
-      if (request.subscribers) {
-        try {
-          await supabase.functions.invoke("notify-subscriber", {
-            body: {
-              subscriber_id: request.subscribers.id,
-              action: "extend_rejected",
-            },
-          });
-        } catch (notifyErr) {
-          console.error("Notification failed:", notifyErr);
-        }
-      }
-
-      toast.success("Extension request rejected");
-      fetchExtendRequests();
-      fetchStats();
-    } catch (error: any) {
-      toast.error("Failed to reject extension", { description: error.message });
-    } finally {
-      setIsProcessingExtendRequest(prev => {
-        const next = new Set(prev);
-        next.delete(request.id);
         return next;
       });
     }
@@ -1190,53 +1011,19 @@ export default function Subscribers() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab("all")}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-              activeTab === "all"
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-muted/80 text-muted-foreground hover:bg-muted"
-            }`}
-          >
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="all" className="gap-2">
             <Users className="h-4 w-4" />
             All Subscribers
-          </button>
-          <button
-            onClick={() => setActiveTab("active")}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-              activeTab === "active"
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-muted/80 text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            <UserCheck className="h-4 w-4" />
-            Active
-            <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-              activeTab === "active" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-background text-muted-foreground"
-            }`}>
-              {stats.active}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab("extend_requests")}
-            className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
-              activeTab === "extend_requests"
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-muted/80 text-muted-foreground hover:bg-muted"
-            }`}
-          >
+          </TabsTrigger>
+          <TabsTrigger value="active" className="gap-2">
             <CalendarPlus className="h-4 w-4" />
-            Extend Requests
-            {stats.extend_requests > 0 && (
-              <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-                activeTab === "extend_requests" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-warning/20 text-warning"
-              }`}>
-                {stats.extend_requests}
-              </span>
-            )}
-          </button>
-        </div>
+            Active / Extend
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+              {stats.active}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
 
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
@@ -1347,130 +1134,6 @@ export default function Subscribers() {
 
         <TabsContent value="active" className="mt-4">
           {renderSubscribersTable(true)}
-        </TabsContent>
-
-        <TabsContent value="extend_requests" className="mt-4">
-          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
-            {isLoadingExtendRequests ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : extendRequests.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <CalendarPlus className="h-12 w-12 mb-2 opacity-50" />
-                <p className="font-semibold">No pending extend requests</p>
-                <p className="text-sm">Extension requests from subscribers will appear here</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto custom-scrollbar">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 border-b border-border hover:bg-muted/50">
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Subscriber</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Project</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Current Expiry</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Requested Days</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Proof</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Requested At</TableHead>
-                      <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="divide-y divide-border">
-                    {extendRequests.map((request) => {
-                      const subscriber = request.subscribers;
-                      const currentExpiry = subscriber?.expiry_date 
-                        ? format(new Date(subscriber.expiry_date), "MMM d, yyyy")
-                        : "—";
-                      
-                      return (
-                        <TableRow key={request.id} className="hover:bg-muted/50 transition-colors">
-                          <TableCell className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <img 
-                                src={`https://picsum.photos/seed/${subscriber?.telegram_user_id}/32/32`} 
-                                className="w-8 h-8 rounded-full border border-border" 
-                                alt={subscriber?.first_name || subscriber?.username || "User"} 
-                              />
-                              <div>
-                                <span className="font-semibold text-sm text-foreground">
-                                  {subscriber?.first_name || subscriber?.username || "Unknown"}
-                                </span>
-                                {subscriber?.username && (
-                                  <p className="text-xs text-muted-foreground">@{subscriber.username}</p>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="px-6 py-4 text-sm text-muted-foreground">
-                            {request.projects?.project_name || "—"}
-                          </TableCell>
-                          <TableCell className="px-6 py-4 text-sm text-muted-foreground">
-                            {currentExpiry}
-                          </TableCell>
-                          <TableCell className="px-6 py-4">
-                            <Badge variant="secondary" className="gap-1">
-                              <CalendarPlus className="h-3 w-3" />
-                              +{request.requested_days} days
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="px-6 py-4">
-                            {request.payment_proof_url ? (
-                              <a
-                                href={request.payment_proof_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline text-sm flex items-center gap-1"
-                              >
-                                <Eye className="h-3 w-3" />
-                                View Proof
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">No proof</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="px-6 py-4 text-sm text-muted-foreground">
-                            {format(new Date(request.created_at), "MMM d, HH:mm")}
-                          </TableCell>
-                          <TableCell className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1 bg-success/20 border-success/30 text-success hover:bg-success/30"
-                                onClick={() => handleApproveExtendRequest(request)}
-                                disabled={isProcessingExtendRequest.has(request.id)}
-                              >
-                                {isProcessingExtendRequest.has(request.id) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle className="h-3 w-3" />
-                                )}
-                                Approve
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1 bg-destructive/20 border-destructive/30 text-destructive hover:bg-destructive/30"
-                                onClick={() => handleRejectExtendRequest(request)}
-                                disabled={isProcessingExtendRequest.has(request.id)}
-                              >
-                                {isProcessingExtendRequest.has(request.id) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <XCircle className="h-3 w-3" />
-                                )}
-                                Reject
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
         </TabsContent>
       </Tabs>
 
