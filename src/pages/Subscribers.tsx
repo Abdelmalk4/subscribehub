@@ -683,49 +683,44 @@ export default function Subscribers() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < subscribers.length;
 
   const renderSubscribersTable = (showExtendColumn: boolean = false) => (
-    <Card variant="glass">
-      <CardContent className="p-0">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : subscribers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <Users className="h-12 w-12 mb-2 opacity-50" />
-            <p>No subscribers found</p>
-            <p className="text-sm">Try adjusting your filters</p>
-          </div>
-        ) : (
-          <>
+    <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : subscribers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+          <Users className="h-12 w-12 mb-2 opacity-50" />
+          <p className="font-semibold">No subscribers found</p>
+          <p className="text-sm">Try adjusting your filters</p>
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader>
-                <TableRow className="border-border/30 hover:bg-transparent">
-                  <TableHead className="w-12">
+                <TableRow className="bg-muted/50 border-b border-border hover:bg-muted/50">
+                  <TableHead className="w-12 px-6 py-4">
                     <Checkbox
                       checked={allSelected}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all"
-                      className={someSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                      className="rounded"
                     />
                   </TableHead>
-                  <TableHead className="text-muted-foreground">Subscriber</TableHead>
-                  <TableHead className="text-muted-foreground">Project</TableHead>
-                  <TableHead className="text-muted-foreground">Plan</TableHead>
-                  <TableHead className="text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Hash className="h-3 w-3" />
-                      In Channel
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-muted-foreground">Expiry</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Name</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Project</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Plan</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Channel</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Expiry</TableHead>
                   {showExtendColumn && (
-                    <TableHead className="text-muted-foreground">Quick Extend</TableHead>
+                    <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Extend</TableHead>
                   )}
-                  <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="divide-y divide-border">
                 {subscribers.map((subscriber) => {
                   const status = statusConfig[subscriber.status] || { label: subscriber.status, variant: "muted" };
                   const expiryInfo = getExpiryInfo(subscriber.expiry_date);
@@ -733,62 +728,70 @@ export default function Subscribers() {
                   return (
                     <TableRow
                       key={subscriber.id}
-                      className={`border-border/30 hover:bg-muted/30 ${
-                        selectedIds.has(subscriber.id) ? "bg-primary/5" : ""
-                      } ${subscriber.channel_joined === false && subscriber.status === "active" ? "bg-destructive/5" : ""}`}
+                      className={`hover:bg-muted/50 transition-colors ${
+                        selectedIds.has(subscriber.id) ? "bg-muted/30" : ""
+                      }`}
                     >
-                      <TableCell>
+                      <TableCell className="px-6 py-4">
                         <Checkbox
                           checked={selectedIds.has(subscriber.id)}
                           onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
                           aria-label={`Select ${subscriber.username || subscriber.first_name}`}
+                          className="rounded"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-6 py-4">
                         <div
                           className="flex items-center gap-3 cursor-pointer"
                           onClick={() => handleViewDetails(subscriber)}
                         >
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center">
-                            <span className="text-sm font-medium text-foreground">
-                              {subscriber.first_name?.[0] || subscriber.username?.[0] || "?"}
-                            </span>
-                          </div>
+                          <img 
+                            src={`https://picsum.photos/seed/${subscriber.telegram_user_id}/32/32`} 
+                            className="w-8 h-8 rounded-full border border-border" 
+                            alt={subscriber.first_name || subscriber.username || "User"} 
+                          />
                           <div>
-                            <p className="font-medium text-foreground hover:text-primary transition-colors">
-                              {subscriber.username ? `@${subscriber.username}` : subscriber.first_name || "Unknown"}
-                            </p>
-                            <p className="text-xs text-muted-foreground font-mono">
-                              {subscriber.telegram_user_id}
-                            </p>
+                            <span className="font-semibold text-sm text-foreground">
+                              {subscriber.first_name || subscriber.username || "Unknown"}
+                            </span>
+                            {subscriber.username && (
+                              <p className="text-xs text-muted-foreground">@{subscriber.username}</p>
+                            )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-foreground">
+                      <TableCell className="px-6 py-4 text-sm text-muted-foreground">
                         {subscriber.projects?.project_name || "—"}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="glass">
+                      <TableCell className="px-6 py-4">
+                        <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-[10px] font-semibold">
                           {subscriber.plans?.plan_name || "—"}
-                        </Badge>
+                        </span>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={status.variant as any}>
-                          {subscriber.status === "active" && (
-                            <span className="h-1.5 w-1.5 rounded-full bg-current mr-1.5 animate-pulse" />
-                          )}
+                      <TableCell className="px-6 py-4">
+                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                          subscriber.status === 'active' 
+                            ? 'bg-success/10 text-success border border-success/20' 
+                            : subscriber.status === 'expired' || subscriber.status === 'rejected'
+                            ? 'bg-muted text-muted-foreground border border-border'
+                            : 'bg-warning/10 text-warning border border-warning/20'
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            subscriber.status === 'active' ? 'bg-success' : 
+                            subscriber.status === 'expired' || subscriber.status === 'rejected' ? 'bg-muted-foreground' : 'bg-warning'
+                          }`} />
                           {status.label}
-                        </Badge>
+                        </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {getChannelStatusBadge(subscriber)}
                           <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="sm"
                             onClick={() => handleCheckMembership(subscriber)}
                             disabled={isCheckingMembership.has(subscriber.id)}
-                            className="h-6 w-6"
+                            className="h-6 w-6 p-0"
                           >
                             {isCheckingMembership.has(subscriber.id) ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -798,11 +801,13 @@ export default function Subscribers() {
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className={`text-sm ${expiryInfo.isUrgent ? "text-warning font-medium" : expiryInfo.isExpired ? "text-destructive" : "text-muted-foreground"}`}>
+                      <TableCell className="px-6 py-4">
+                        <div className="text-sm text-muted-foreground">
                           {expiryInfo.text}
                           {expiryInfo.daysLeft !== null && expiryInfo.daysLeft >= 0 && expiryInfo.daysLeft <= 7 && (
-                            <span className="block text-xs">({expiryInfo.daysLeft}d left)</span>
+                            <span className={`block text-xs ${expiryInfo.isUrgent ? "text-warning" : ""}`}>
+                              ({expiryInfo.daysLeft}d left)
+                            </span>
                           )}
                         </div>
                       </TableCell>
@@ -885,53 +890,53 @@ export default function Subscribers() {
                 })}
               </TableBody>
             </Table>
+          </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border/30">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Rows per page:</span>
-                <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
-                  <SelectTrigger className="w-[70px] h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAGE_SIZES.map((size) => (
-                      <SelectItem key={size} value={size.toString()}>
-                        {size}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Rows per page:</span>
+              <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
+                <SelectTrigger className="w-[70px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZES.map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground">
-                  {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={page === 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </>
+      )}
+    </div>
   );
 
   return (
