@@ -69,7 +69,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   const { user, signOut } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isOpen, setIsOpen] = useState(true);
-  const [showPromo, setShowPromo] = useState(true);
+  
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
 
@@ -119,7 +119,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     return { planName, daysLeft, progress };
   };
 
-  const { daysLeft } = getSubscriptionInfo();
+  const { daysLeft, progress } = getSubscriptionInfo();
 
   const favorites = [
     { id: 'subscribers-fav', label: 'Active Subscribers' },
@@ -225,9 +225,13 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         {/* Bottom Section */}
         <div className="p-4 border-t border-border space-y-4">
           {/* Subscription Promo Card */}
-          {!isAdmin && isOpen && showPromo && (
+          {!isAdmin && isOpen && (
             <div className="bg-muted border border-border rounded-xl p-4 space-y-3">
-              <div className="font-bold text-sm text-foreground">{daysLeft} Days Left!</div>
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-sm text-foreground">{daysLeft} Days Left!</div>
+                <span className="text-xs text-muted-foreground">{14 - Math.round((progress / 100) * 14)}/14 days</span>
+              </div>
+              <Progress value={100 - progress} className="h-2" />
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Select a plan and unlock unlimited premium features.
               </p>
