@@ -36,16 +36,46 @@ serve(async (req) => {
       });
     }
 
-    // Fetch plan details
+    // Security: Verify subscriber exists with matching telegram_user_id and project_id
+    // This ensures the request is legitimate (only valid subscriber/project combinations work)
+    const { data: subscriber, error: subscriberError } = await supabase
+      .from("subscribers")
+      .select("id, status, telegram_user_id")
+      .eq("id", subscriber_id)
+      .eq("project_id", project_id)
+      .eq("telegram_user_id", telegram_user_id)
+      .single();
+
+    if (subscriberError || !subscriber) {
+      console.error("Subscriber validation failed:", subscriberError);
+      return new Response(JSON.stringify({ error: "Invalid subscriber" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify subscriber is in a valid state for checkout
+    const validStates = ["pending_payment", "expired", "awaiting_proof"];
+    if (!validStates.includes(subscriber.status)) {
+      console.error("Subscriber not in valid state for checkout:", subscriber.status);
+      return new Response(JSON.stringify({ error: "Subscriber cannot checkout in current state" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Fetch plan details and verify it belongs to the project
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
       .eq("id", plan_id)
+      .eq("project_id", project_id) // Ensure plan belongs to project
+      .eq("is_active", true) // Only active plans
       .single();
 
     if (planError || !plan) {
-      console.error("Plan not found:", planError);
-      return new Response(JSON.stringify({ error: "Plan not found" }), {
+      console.error("Plan not found or inactive:", planError);
+      return new Response(JSON.stringify({ error: "Plan not found or inactive" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
