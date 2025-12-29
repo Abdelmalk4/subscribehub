@@ -226,13 +226,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         <div className="p-4 border-t border-border space-y-4">
           {/* Subscription Promo Card */}
           {!isAdmin && isOpen && showPromo && (
-            <div className="bg-muted border border-border rounded-xl p-4 space-y-3 relative">
-              <button 
-                onClick={() => setShowPromo(false)}
-                className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
-              >
-                <X size={14} />
-              </button>
+            <div className="bg-muted border border-border rounded-xl p-4 space-y-3">
               <div className="font-bold text-sm text-foreground">{daysLeft} Days Left!</div>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Select a plan and unlock unlimited premium features.
