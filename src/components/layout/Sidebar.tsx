@@ -14,8 +14,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Info,
-  X,
   ChevronDown,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +30,11 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badge?: number;
+}
+
+interface Project {
+  id: string;
+  project_name: string;
 }
 
 const clientNavItems: NavItem[] = [
@@ -68,14 +73,15 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isOpen, setIsOpen] = useState(true);
-  
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
 
   useEffect(() => {
     if (user && !isAdmin) {
       fetchSubscription();
+      fetchProjects();
     }
   }, [user, isAdmin]);
 
@@ -96,6 +102,17 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
       .eq("client_id", user.id)
       .maybeSingle();
     setSubscription(data as Subscription | null);
+  };
+
+  const fetchProjects = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("projects")
+      .select("id, project_name")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    setProjects(data || []);
   };
 
   const handleSignOut = async () => {
@@ -121,11 +138,8 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
   const { daysLeft, progress } = getSubscriptionInfo();
 
-  const favorites = [
-    { id: 'subscribers-fav', label: 'Active Subscribers' },
-    { id: 'analytics-fav', label: 'Monthly Report' },
-    { id: 'projects-fav', label: 'Main Project' },
-  ];
+  // Dynamic projects list replaces hardcoded favorites
+  const displayProjects = projects.slice(0, 3);
 
   return (
     <aside className={cn(
@@ -200,23 +214,28 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
             })}
           </div>
 
-          {/* Favorites */}
-          {isOpen && (
+          {/* My Projects (Dynamic) */}
+          {isOpen && !isAdmin && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3">
-                Favorites
+                My Projects
                 <ChevronDown size={12} />
               </div>
               <div className="space-y-1">
-                {favorites.map((fav) => (
-                  <button 
-                    key={fav.id} 
-                    className="w-full flex items-center gap-3 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <div className="w-2 h-2 rounded-sm bg-foreground" />
-                    {fav.label}
-                  </button>
-                ))}
+                {displayProjects.length > 0 ? (
+                  displayProjects.map((project) => (
+                    <Link 
+                      key={project.id}
+                      to={`/subscribers?project=${project.id}`}
+                      className="w-full flex items-center gap-3 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Zap size={12} className="text-primary" />
+                      <span className="truncate">{project.project_name}</span>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="px-3 py-1.5 text-xs text-muted-foreground">No projects yet</p>
+                )}
               </div>
             </div>
           )}
