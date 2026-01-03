@@ -28,9 +28,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Loader2, UserPlus } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, UserPlus, AlertTriangle, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits";
+import { useNavigate } from "react-router-dom";
 
 const subscriberSchema = z.object({
   telegram_user_id: z.string().regex(/^\d+$/, "Must be a valid Telegram user ID"),
@@ -64,10 +67,13 @@ interface AddSubscriberDialogProps {
 }
 
 export function AddSubscriberDialog({ open, onOpenChange, projects, onSuccess }: AddSubscriberDialogProps) {
+  const navigate = useNavigate();
+  const limits = useSubscriptionLimits();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(false);
 
+  const isAtLimit = !limits.loading && !limits.canAddSubscriber;
   const form = useForm<SubscriberFormData>({
     resolver: zodResolver(subscriberSchema),
     defaultValues: {
@@ -171,6 +177,29 @@ export function AddSubscriberDialog({ open, onOpenChange, projects, onSuccess }:
             Manually add a subscriber with an active subscription.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Limit Warning */}
+        {isAtLimit && (
+          <Alert className="border-warning/50 bg-warning/10">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                You've reached your subscriber limit ({limits.currentSubscribers}/{limits.maxSubscribers}).
+              </span>
+              <Button
+                variant="warning"
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate("/billing");
+                }}
+              >
+                <Crown className="h-4 w-4 mr-1" />
+                Upgrade
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -304,7 +333,7 @@ export function AddSubscriberDialog({ open, onOpenChange, projects, onSuccess }:
               <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
                 Cancel
               </Button>
-              <Button type="submit" variant="gradient" className="flex-1" disabled={isSubmitting}>
+              <Button type="submit" variant="gradient" className="flex-1" disabled={isSubmitting || isAtLimit}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

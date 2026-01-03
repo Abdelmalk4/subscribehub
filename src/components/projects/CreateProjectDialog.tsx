@@ -21,10 +21,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Hash, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Bot, Hash, Loader2, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscriptionLimits } from "@/hooks/useSubscriptionLimits";
+import { useNavigate } from "react-router-dom";
 
 const projectSchema = z.object({
   project_name: z.string().min(3, "Name must be at least 3 characters").max(50, "Name must be less than 50 characters"),
@@ -51,10 +54,13 @@ interface CreateProjectDialogProps {
 
 export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreateProjectDialogProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const limits = useSubscriptionLimits();
   const [isValidating, setIsValidating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
+  const isAtLimit = !limits.loading && !limits.canAddProject;
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
@@ -190,6 +196,30 @@ export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreatePro
             Set up a new Telegram channel with automated subscription management.
           </SheetDescription>
         </SheetHeader>
+
+        {/* Limit Warning */}
+        {isAtLimit && (
+          <Alert className="mt-4 border-warning/50 bg-warning/10">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                You've reached your project limit ({limits.currentProjects}/{limits.maxProjects}).
+                Upgrade to add more projects.
+              </span>
+              <Button
+                variant="warning"
+                size="sm"
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate("/billing");
+                }}
+              >
+                <Crown className="h-4 w-4 mr-1" />
+                Upgrade
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
@@ -330,7 +360,7 @@ export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreatePro
                 type="submit"
                 variant="gradient"
                 className="flex-1"
-                disabled={isSubmitting || !validationResult?.valid}
+                disabled={isSubmitting || !validationResult?.valid || isAtLimit}
               >
                 {isSubmitting ? (
                   <>
