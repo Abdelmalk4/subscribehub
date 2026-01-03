@@ -887,52 +887,104 @@ async function handlePaymentMethod(
       .eq("project_id", project.id)
       .eq("telegram_user_id", userId);
 
-    // Fetch platform payment methods
-    const { data: paymentMethods } = await supabase
-      .from("platform_payment_methods")
-      .select("*")
-      .eq("is_active", true)
-      .order("display_order", { ascending: true });
+    // First, try to fetch client's own payment methods
+    const { data: projectData } = await supabase
+      .from("projects")
+      .select("user_id")
+      .eq("id", project.id)
+      .single();
 
     let paymentInstructions = "";
 
-    if (paymentMethods && paymentMethods.length > 0) {
-      paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
+    if (projectData?.user_id) {
+      const { data: clientMethods } = await supabase
+        .from("client_payment_methods")
+        .select("*")
+        .eq("user_id", projectData.user_id)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
 
-      for (const pm of paymentMethods) {
-        paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type})\n`;
+      if (clientMethods && clientMethods.length > 0) {
+        paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
 
-        const details = pm.details as Record<string, string>;
-        if (pm.method_type === "bank_transfer" && details) {
-          if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
-          if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
-          if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
-          if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
-        } else if (pm.method_type === "crypto" && details) {
-          if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
-          if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
-        } else if (pm.method_type === "mobile_money" && details) {
-          if (details.provider) paymentInstructions += `📱 Provider: ${sanitizeForHTML(details.provider)}\n`;
-          if (details.phone_number) paymentInstructions += `📞 Number: ${details.phone_number}\n`;
-          if (details.name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.name)}\n`;
-        } else if (details) {
-          for (const [key, value] of Object.entries(details)) {
-            if (value) {
-              const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-              paymentInstructions += `${formattedKey}: ${sanitizeForHTML(String(value))}\n`;
+        for (const pm of clientMethods) {
+          paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type.replace(/_/g, ' ')})\n`;
+
+          const details = pm.details as Record<string, string>;
+          if (pm.method_type === "bank_transfer" && details) {
+            if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
+            if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
+            if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
+            if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
+          } else if (pm.method_type === "binance" && details) {
+            if (details.binance_id) paymentInstructions += `🔢 Binance ID: ${sanitizeForHTML(details.binance_id)}\n`;
+            if (details.binance_email) paymentInstructions += `📧 Email: ${sanitizeForHTML(details.binance_email)}\n`;
+          } else if (pm.method_type === "crypto" && details) {
+            if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
+            if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
+          } else if (details) {
+            for (const [key, value] of Object.entries(details)) {
+              if (value) {
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                paymentInstructions += `${formattedKey}: ${sanitizeForHTML(String(value))}\n`;
+              }
             }
           }
-        }
 
-        if (pm.instructions) {
-          paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
+          if (pm.instructions) {
+            paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
+          }
+          paymentInstructions += "\n";
         }
-        paymentInstructions += "\n";
       }
-    } else {
-      const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || 
-        "Please send your payment to complete the subscription.";
-      paymentInstructions = `📝 <b>Instructions:</b>\n${instructions}`;
+    }
+
+    // Fallback to platform payment methods if no client methods configured
+    if (!paymentInstructions) {
+      const { data: paymentMethods } = await supabase
+        .from("platform_payment_methods")
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+
+      if (paymentMethods && paymentMethods.length > 0) {
+        paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
+
+        for (const pm of paymentMethods) {
+          paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type})\n`;
+
+          const details = pm.details as Record<string, string>;
+          if (pm.method_type === "bank_transfer" && details) {
+            if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
+            if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
+            if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
+            if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
+          } else if (pm.method_type === "crypto" && details) {
+            if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
+            if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
+          } else if (pm.method_type === "mobile_money" && details) {
+            if (details.provider) paymentInstructions += `📱 Provider: ${sanitizeForHTML(details.provider)}\n`;
+            if (details.phone_number) paymentInstructions += `📞 Number: ${details.phone_number}\n`;
+            if (details.name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.name)}\n`;
+          } else if (details) {
+            for (const [key, value] of Object.entries(details)) {
+              if (value) {
+                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                paymentInstructions += `${formattedKey}: ${sanitizeForHTML(String(value))}\n`;
+              }
+            }
+          }
+
+          if (pm.instructions) {
+            paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
+          }
+          paymentInstructions += "\n";
+        }
+      } else {
+        const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || 
+          "Please send your payment to complete the subscription.";
+        paymentInstructions = `📝 <b>Instructions:</b>\n${instructions}`;
+      }
     }
 
     await sendTelegramMessage(

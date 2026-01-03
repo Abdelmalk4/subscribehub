@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_payment_methods: {
+        Row: {
+          created_at: string | null
+          details: Json
+          display_order: number | null
+          id: string
+          instructions: string | null
+          is_active: boolean | null
+          method_name: string
+          method_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json
+          display_order?: number | null
+          id?: string
+          instructions?: string | null
+          is_active?: boolean | null
+          method_name: string
+          method_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json
+          display_order?: number | null
+          id?: string
+          instructions?: string | null
+          is_active?: boolean | null
+          method_name?: string
+          method_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       client_subscription_payments: {
         Row: {
           amount: number
@@ -168,6 +207,78 @@ export type Database = {
             columns: ["subscriber_id"]
             isOneToOne: false
             referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          admin_notes: string | null
+          amount: number
+          client_id: string
+          created_at: string | null
+          due_date: string | null
+          id: string
+          invoice_number: string
+          notes: string | null
+          paid_at: string | null
+          payment_method: string | null
+          payment_proof_url: string | null
+          plan_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          subscription_id: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount: number
+          client_id: string
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_number: string
+          notes?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number
+          client_id?: string
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_number?: string
+          notes?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          payment_proof_url?: string | null
+          plan_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subscription_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "client_subscriptions"
             referencedColumns: ["id"]
           },
         ]
