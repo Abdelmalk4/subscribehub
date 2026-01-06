@@ -44,6 +44,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminGuard } from "@/hooks/useAdminGuard";
 
 interface Payment {
   id: string;
@@ -62,6 +63,7 @@ interface Payment {
 
 export default function AdminPayments() {
   const { user } = useAuth();
+  const { verifyAdminRole } = useAdminGuard();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +173,13 @@ export default function AdminPayments() {
     if (!selectedPayment || !user) return;
 
     setReviewing(true);
+
+    // CRITICAL: Verify admin role before performing sensitive operation
+    const isAdmin = await verifyAdminRole();
+    if (!isAdmin) {
+      setReviewing(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("client_subscription_payments")
