@@ -702,6 +702,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      process_stripe_payment: {
+        Args: { p_duration_days?: number; p_subscriber_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "super_admin" | "client"
