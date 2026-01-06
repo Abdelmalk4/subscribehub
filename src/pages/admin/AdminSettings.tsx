@@ -35,6 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 import { PaymentMethodsManager } from "@/components/admin/PaymentMethodsManager";
+import { useAdminGuard } from "@/hooks/useAdminGuard";
 
 interface SubscriptionPlan {
   id: string;
@@ -49,6 +50,7 @@ interface SubscriptionPlan {
 }
 
 export default function AdminSettings() {
+  const { verifyAdminRole } = useAdminGuard();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
@@ -102,6 +104,10 @@ export default function AdminSettings() {
   };
 
   const savePlatformSetting = async (key: string, value: Json) => {
+    // Verify admin role before modifying settings
+    const isAdmin = await verifyAdminRole();
+    if (!isAdmin) return;
+
     const { error } = await supabase
       .from("platform_config")
       .upsert(
@@ -119,6 +125,10 @@ export default function AdminSettings() {
 
   const handleSavePlan = async () => {
     if (!editingPlan) return;
+
+    // Verify admin role before modifying plans
+    const isAdmin = await verifyAdminRole();
+    if (!isAdmin) return;
 
     const planData = {
       plan_name: editingPlan.plan_name,
@@ -161,6 +171,10 @@ export default function AdminSettings() {
 
   const handleDeletePlan = async (planId: string) => {
     if (!confirm("Are you sure you want to delete this plan?")) return;
+
+    // Verify admin role before deleting
+    const isAdmin = await verifyAdminRole();
+    if (!isAdmin) return;
 
     const { error } = await supabase
       .from("subscription_plans")

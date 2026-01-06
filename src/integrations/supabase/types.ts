@@ -663,6 +663,33 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events: {
+        Row: {
+          event_id: string
+          event_source: string
+          event_type: string | null
+          id: string
+          processed_at: string | null
+          result: Json | null
+        }
+        Insert: {
+          event_id: string
+          event_source: string
+          event_type?: string | null
+          id?: string
+          processed_at?: string | null
+          result?: Json | null
+        }
+        Update: {
+          event_id?: string
+          event_source?: string
+          event_type?: string | null
+          id?: string
+          processed_at?: string | null
+          result?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

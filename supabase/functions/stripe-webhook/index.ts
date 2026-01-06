@@ -101,23 +101,50 @@ serve(async (req) => {
 
     console.log("Received Stripe webhook");
 
-    // Verify webhook signature if secret is configured
-    if (stripeWebhookSecret && signature) {
-      const isValid = await verifyStripeSignature(payload, signature, stripeWebhookSecret);
-      if (!isValid) {
-        console.error("Invalid Stripe signature");
-        return new Response(JSON.stringify({ error: "Invalid signature" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      console.log("Stripe signature verified");
-    } else {
-      console.log("Skipping signature verification (webhook secret not configured)");
+    // CRITICAL: Webhook signature verification is MANDATORY
+    if (!stripeWebhookSecret) {
+      console.error("STRIPE_WEBHOOK_SECRET not configured - rejecting webhook");
+      return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    if (!signature) {
+      console.error("Missing stripe-signature header");
+      return new Response(JSON.stringify({ error: "Missing signature" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const isValid = await verifyStripeSignature(payload, signature, stripeWebhookSecret);
+    if (!isValid) {
+      console.error("Invalid Stripe signature");
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    console.log("Stripe signature verified");
+
     const event = JSON.parse(payload);
-    console.log("Stripe event type:", event.type);
+    console.log("Stripe event type:", event.type, "Event ID:", event.id);
+
+    // IDEMPOTENCY CHECK: Prevent duplicate processing
+    const { data: existingEvent } = await supabase
+      .from("webhook_events")
+      .select("id")
+      .eq("event_source", "stripe")
+      .eq("event_id", event.id)
+      .single();
+
+    if (existingEvent) {
+      console.log(`Duplicate Stripe event ${event.id} - already processed`);
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
@@ -256,6 +283,14 @@ serve(async (req) => {
         await sendTelegramMessage(project.bot_token, subscriber.telegram_user_id, message);
         console.log("Sent confirmation message to Telegram user");
       }
+
+      // Record successful processing for idempotency
+      await supabase.from("webhook_events").insert({
+        event_source: "stripe",
+        event_id: event.id,
+        event_type: event.type,
+        result: { status: "processed", subscriber_id: subscriberId }
+      });
     }
 
     return new Response(JSON.stringify({ received: true }), {
