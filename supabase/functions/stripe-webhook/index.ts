@@ -196,64 +196,56 @@ serve(async (req) => {
         });
       }
 
-      // Calculate dates - CRITICAL FIX: Extend from existing expiry if active and not expired
+      // Get plan duration
       const plan = subscriber.plans;
       const durationDays = plan?.duration_days || 30;
       
-      let startDate: Date;
-      let expiryDate: Date;
-      
-      // Check if this is an extension (subscriber is active with future expiry)
+      // Store pre-update state for message logic
+      const wasActive = subscriber.status === "active";
       const currentExpiryDate = subscriber.expiry_date ? new Date(subscriber.expiry_date) : null;
       const now = new Date();
+      const isExtension = wasActive && currentExpiryDate && currentExpiryDate > now;
+
+      // PHASE 4: Use atomic function with row locking to prevent race conditions
+      console.log(`Processing payment atomically for subscriber ${subscriberId}, duration: ${durationDays} days`);
       
-      if (subscriber.status === "active" && currentExpiryDate && currentExpiryDate > now) {
-        // EXTENSION: Add duration to existing expiry date
-        startDate = new Date(subscriber.start_date || now);
-        expiryDate = new Date(currentExpiryDate);
-        expiryDate.setDate(expiryDate.getDate() + durationDays);
-        
-        console.log(`EXTENSION: Adding ${durationDays} days to existing expiry ${currentExpiryDate.toISOString()}`);
-        console.log(`New expiry date: ${expiryDate.toISOString()}`);
-      } else {
-        // NEW SUBSCRIPTION or REACTIVATION: Start from now
-        startDate = now;
-        expiryDate = new Date(now);
-        expiryDate.setDate(expiryDate.getDate() + durationDays);
-        
-        console.log(`NEW/REACTIVATION: Starting from ${startDate.toISOString()}, expiry: ${expiryDate.toISOString()}`);
+      const { data: paymentResult, error: rpcError } = await supabase.rpc("process_stripe_payment", {
+        p_subscriber_id: subscriberId,
+        p_duration_days: durationDays,
+      });
+
+      if (rpcError) {
+        console.error("Error in atomic payment processing:", rpcError);
+        return new Response(JSON.stringify({ error: "Payment processing failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      console.log("Atomic payment result:", JSON.stringify(paymentResult));
+      
+      const startDate = new Date(paymentResult.start_date);
+      const expiryDate = new Date(paymentResult.expiry_date);
 
       // Create invite link (only needed for new subscriptions or reactivations)
       let inviteLink = subscriber.invite_link;
-      if (!inviteLink || subscriber.status !== "active") {
+      if (!inviteLink || !wasActive) {
         inviteLink = await createInviteLink(
           project.bot_token,
           project.channel_id,
           subscriber.first_name || `User ${subscriber.telegram_user_id}`
         );
+        
+        // Update invite link separately (atomic function handles core fields)
+        if (inviteLink) {
+          await supabase
+            .from("subscribers")
+            .update({ invite_link: inviteLink })
+            .eq("id", subscriberId);
+        }
       }
 
-      // Update subscriber
-      const { error: updateError } = await supabase
-        .from("subscribers")
-        .update({
-          status: "active",
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          payment_method: "stripe",
-          invite_link: inviteLink,
-          expiry_reminder_sent: false, // Reset reminders for extended subscriptions
-          final_reminder_sent: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", subscriberId);
-
-      if (updateError) {
-        console.error("Error updating subscriber:", updateError);
-      } else {
-        console.log("Subscriber updated to active with expiry:", expiryDate.toISOString());
-      }
+      console.log("Subscriber updated to active with expiry:", expiryDate.toISOString());
 
       // Send confirmation to user via Telegram
       if (subscriber.telegram_user_id) {
