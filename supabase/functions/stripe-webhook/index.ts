@@ -11,6 +11,10 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY")!;
 const stripeWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
+// Rate limiting configuration
+const RATE_LIMIT_REQUESTS = 100; // requests per window
+const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute window
+
 // Simple crypto verification for Stripe webhooks
 async function verifyStripeSignature(payload: string, signature: string, secret: string): Promise<boolean> {
   try {
@@ -45,6 +49,31 @@ async function verifyStripeSignature(payload: string, signature: string, secret:
   } catch (error) {
     console.error("Signature verification error:", error);
     return false;
+  }
+}
+
+// Rate limit check function
+async function checkRateLimit(supabase: any, identifier: string): Promise<{ allowed: boolean; retryAfter?: number }> {
+  try {
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_identifier: identifier,
+      p_endpoint: "stripe-webhook",
+      p_limit: RATE_LIMIT_REQUESTS,
+      p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+
+    if (error) {
+      console.error("Rate limit check error:", error);
+      return { allowed: true }; // Fail open
+    }
+
+    return {
+      allowed: data.allowed,
+      retryAfter: data.retry_after,
+    };
+  } catch (err) {
+    console.error("Rate limit exception:", err);
+    return { allowed: true };
   }
 }
 
@@ -100,6 +129,17 @@ serve(async (req) => {
     const signature = req.headers.get("stripe-signature");
 
     console.log("Received Stripe webhook");
+
+    // PHASE 6: Rate limiting check (using IP or a general identifier)
+    const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rateLimitResult = await checkRateLimit(supabase, `stripe:${clientIP}`);
+    if (!rateLimitResult.allowed) {
+      console.warn(`Rate limit exceeded for IP ${clientIP}`);
+      return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rateLimitResult.retryAfter || 60) },
+      });
+    }
 
     // CRITICAL: Webhook signature verification is MANDATORY
     if (!stripeWebhookSecret) {
@@ -249,8 +289,6 @@ serve(async (req) => {
 
       // Send confirmation to user via Telegram
       if (subscriber.telegram_user_id) {
-        const isExtension = subscriber.status === "active" && currentExpiryDate && currentExpiryDate > now;
-        
         let message = "";
         if (isExtension) {
           message = `🎉 <b>Subscription Extended!</b>\n\n`;
@@ -275,6 +313,26 @@ serve(async (req) => {
         await sendTelegramMessage(project.bot_token, subscriber.telegram_user_id, message);
         console.log("Sent confirmation message to Telegram user");
       }
+
+      // PHASE 5: Log audit event for payment completion
+      await supabase.rpc("log_audit_event", {
+        p_user_id: null,
+        p_action: "stripe_payment_completed",
+        p_resource_type: "subscriber",
+        p_resource_id: subscriberId,
+        p_changes: {
+          stripe_event_id: event.id,
+          session_id: session.id,
+          project_id: projectId,
+          plan_id: planId,
+          amount_total: session.amount_total,
+          currency: session.currency,
+          is_extension: isExtension,
+          old_expiry_date: subscriber.expiry_date,
+          new_expiry_date: expiryDate.toISOString(),
+          duration_days: durationDays,
+        },
+      });
 
       // Record successful processing for idempotency
       await supabase.from("webhook_events").insert({

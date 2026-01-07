@@ -45,6 +45,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdminGuard } from "@/hooks/useAdminGuard";
+import { logAuditEvent } from "@/lib/auditLog";
 
 interface Payment {
   id: string;
@@ -196,6 +197,19 @@ export default function AdminPayments() {
       console.error(error);
     } else {
       toast.success(`Payment ${action === "approve" ? "approved" : "rejected"} successfully`);
+
+      // PHASE 5: Log audit event
+      await logAuditEvent({
+        action: action === "approve" ? "payment_approved" : "payment_rejected",
+        resourceType: "payment",
+        resourceId: selectedPayment.id,
+        changes: {
+          client_id: selectedPayment.client_id,
+          amount: selectedPayment.amount,
+          plan: selectedPayment.planName,
+          notes: reviewNotes || null,
+        },
+      });
 
       // If approved, update client subscription status
       if (action === "approve") {

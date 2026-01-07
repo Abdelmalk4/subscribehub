@@ -10,11 +10,40 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY")!;
 
+// Rate limiting configuration
+const RATE_LIMIT_REQUESTS = 10; // requests per window per subscriber
+const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute window
+
 interface CreateCheckoutRequest {
   project_id: string;
   plan_id: string;
   subscriber_id: string;
   telegram_user_id: number;
+}
+
+// Rate limit check function
+async function checkRateLimit(supabase: any, identifier: string): Promise<{ allowed: boolean; retryAfter?: number }> {
+  try {
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_identifier: identifier,
+      p_endpoint: "create-checkout-session",
+      p_limit: RATE_LIMIT_REQUESTS,
+      p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+
+    if (error) {
+      console.error("Rate limit check error:", error);
+      return { allowed: true }; // Fail open
+    }
+
+    return {
+      allowed: data.allowed,
+      retryAfter: data.retry_after,
+    };
+  } catch (err) {
+    console.error("Rate limit exception:", err);
+    return { allowed: true };
+  }
 }
 
 serve(async (req) => {
@@ -36,8 +65,17 @@ serve(async (req) => {
       });
     }
 
+    // PHASE 6: Rate limiting check
+    const rateLimitResult = await checkRateLimit(supabase, `checkout:${subscriber_id}`);
+    if (!rateLimitResult.allowed) {
+      console.warn(`Rate limit exceeded for subscriber ${subscriber_id}`);
+      return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: rateLimitResult.retryAfter }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rateLimitResult.retryAfter || 60) },
+      });
+    }
+
     // Security: Verify subscriber exists with matching telegram_user_id and project_id
-    // This ensures the request is legitimate (only valid subscriber/project combinations work)
     const { data: subscriber, error: subscriberError } = await supabase
       .from("subscribers")
       .select("id, status, telegram_user_id")
@@ -55,7 +93,7 @@ serve(async (req) => {
     }
 
     // Verify subscriber is in a valid state for checkout
-    const validStates = ["pending_payment", "expired", "awaiting_proof"];
+    const validStates = ["pending_payment", "expired", "awaiting_proof", "active"]; // Allow active for renewals
     if (!validStates.includes(subscriber.status)) {
       console.error("Subscriber not in valid state for checkout:", subscriber.status);
       return new Response(JSON.stringify({ error: "Subscriber cannot checkout in current state" }), {
@@ -69,8 +107,8 @@ serve(async (req) => {
       .from("plans")
       .select("*")
       .eq("id", plan_id)
-      .eq("project_id", project_id) // Ensure plan belongs to project
-      .eq("is_active", true) // Only active plans
+      .eq("project_id", project_id)
+      .eq("is_active", true)
       .single();
 
     if (planError || !plan) {
@@ -135,6 +173,22 @@ serve(async (req) => {
 
     const session = await stripeResponse.json();
     console.log("Checkout session created:", session.id);
+
+    // PHASE 5: Log audit event for checkout creation
+    await supabase.rpc("log_audit_event", {
+      p_user_id: null, // No authenticated user (telegram bot flow)
+      p_action: "checkout_created",
+      p_resource_type: "subscriber",
+      p_resource_id: subscriber_id,
+      p_changes: {
+        plan_id,
+        project_id,
+        telegram_user_id,
+        session_id: session.id,
+        amount: plan.price,
+        currency: plan.currency || "USD",
+      },
+    });
 
     return new Response(JSON.stringify({ 
       checkout_url: session.url,
