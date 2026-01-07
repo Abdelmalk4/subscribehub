@@ -15,6 +15,10 @@ const RETRY_DELAY_MS = 1000;
 const TELEGRAM_API_TIMEOUT_MS = 10000;
 const MAX_FILE_SIZE_MB = 20;
 
+// Rate limiting configuration
+const RATE_LIMIT_REQUESTS = 100; // requests per window
+const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute window
+
 // ============= TYPE DEFINITIONS =============
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -115,6 +119,63 @@ function verifyWebhookAuth(req: Request, botToken: string): boolean {
   return providedToken === expectedToken;
 }
 
+// ============= RATE LIMITING =============
+
+async function checkRateLimit(supabase: any, identifier: string, endpoint: string): Promise<{ allowed: boolean; retryAfter?: number }> {
+  try {
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_identifier: identifier,
+      p_endpoint: endpoint,
+      p_limit: RATE_LIMIT_REQUESTS,
+      p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+
+    if (error) {
+      console.error("[RATE_LIMIT] Error checking rate limit:", error);
+      // Allow request if rate limit check fails (fail open)
+      return { allowed: true };
+    }
+
+    return {
+      allowed: data.allowed,
+      retryAfter: data.retry_after,
+    };
+  } catch (err) {
+    console.error("[RATE_LIMIT] Exception:", err);
+    return { allowed: true };
+  }
+}
+
+// ============= IDEMPOTENCY CHECK =============
+
+async function checkIdempotency(supabase: any, updateId: number): Promise<boolean> {
+  try {
+    const { data: existing } = await supabase
+      .from("webhook_events")
+      .select("id")
+      .eq("event_source", "telegram")
+      .eq("event_id", updateId.toString())
+      .single();
+
+    return !!existing;
+  } catch {
+    return false;
+  }
+}
+
+async function recordWebhookEvent(supabase: any, updateId: number, eventType: string, result: object): Promise<void> {
+  try {
+    await supabase.from("webhook_events").insert({
+      event_source: "telegram",
+      event_id: updateId.toString(),
+      event_type: eventType,
+      result,
+    });
+  } catch (err) {
+    console.error("[IDEMPOTENCY] Error recording event:", err);
+  }
+}
+
 // ============= RETRY WRAPPER =============
 
 async function withRetry<T>(
@@ -169,7 +230,6 @@ async function sendTelegramMessage(
       const result = await response.json();
       
       if (!result.ok) {
-        // Handle specific Telegram errors
         if (result.error_code === 403) {
           console.warn(`[TELEGRAM] User ${chatId} has blocked the bot`);
         } else if (result.error_code === 429) {
@@ -323,6 +383,16 @@ serve(async (req) => {
       });
     }
 
+    // PHASE 6: Rate limiting check
+    const rateLimitResult = await checkRateLimit(supabase, `telegram:${projectId}`, "telegram-bot-handler");
+    if (!rateLimitResult.allowed) {
+      console.warn(`[${requestId}] Rate limit exceeded for project ${projectId}`);
+      return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: rateLimitResult.retryAfter }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(rateLimitResult.retryAfter || 60) },
+      });
+    }
+
     // Fetch project
     const { data: project, error: projectError } = await supabase
       .from("projects")
@@ -353,6 +423,25 @@ serve(async (req) => {
     const update: TelegramUpdate = await req.json();
     console.log(`[${requestId}] Update ID: ${update.update_id}`);
 
+    // PHASE 2: Idempotency check
+    const isDuplicate = await checkIdempotency(supabase, update.update_id);
+    if (isDuplicate) {
+      console.log(`[${requestId}] Duplicate update_id ${update.update_id} - already processed`);
+      return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Determine event type for logging
+    let eventType = "unknown";
+    if (update.callback_query) {
+      eventType = `callback:${update.callback_query.data?.split(":")[0] || "unknown"}`;
+    } else if (update.message?.photo) {
+      eventType = "photo";
+    } else if (update.message?.text) {
+      eventType = `command:${update.message.text.split(" ")[0]}`;
+    }
+
     // Route to appropriate handler
     if (update.callback_query) {
       await handleCallbackQuery(supabase, typedProject, update.callback_query, requestId);
@@ -361,6 +450,9 @@ serve(async (req) => {
     } else if (update.message?.text) {
       await handleTextMessage(supabase, typedProject, update.message, requestId);
     }
+
+    // Record successful processing
+    await recordWebhookEvent(supabase, update.update_id, eventType, { status: "processed", project_id: projectId });
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -506,29 +598,26 @@ async function handlePhotoMessage(
   }
 
   // Update subscriber status
-  const updateData: any = {
-    status: "pending_approval",
-    payment_proof_url: paymentProofUrl || `telegram_file:${fileId}`,
-    updated_at: new Date().toISOString(),
-  };
+  const { error: updateError } = await supabase
+    .from("subscribers")
+    .update({
+      status: "pending_approval",
+      payment_proof_url: paymentProofUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sub.id);
 
-  await supabase.from("subscribers").update(updateData).eq("id", sub.id);
-
-  if (paymentProofUrl) {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      "✅ Payment proof uploaded successfully!\n\nOur team will review your payment and activate your subscription shortly."
-    );
-    console.log(`[${requestId}] Payment proof stored: ${paymentProofUrl}`);
-  } else {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      "📸 Payment proof received!\n\nOur team will review your payment and activate your subscription shortly."
-    );
-    console.warn(`[${requestId}] Saved file_id reference for subscriber ${sub.id}`);
+  if (updateError) {
+    console.error(`[${requestId}] Error updating subscriber:`, updateError);
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Error processing your payment. Please try again later.");
+    return;
   }
+
+  await sendTelegramMessage(
+    project.bot_token,
+    chatId,
+    "✅ <b>Payment proof received!</b>\n\nYour payment is now pending approval. You'll receive a notification once it's verified.\n\nThank you for your patience! 🙏"
+  );
 }
 
 // ============= COMMAND HANDLERS =============
@@ -539,105 +628,279 @@ async function handleStart(
   userId: number,
   chatId: number,
   firstName: string,
-  username: string | undefined,
+  username: string,
   requestId: string
 ) {
-  const { data: existingSubscriber } = await supabase
+  console.log(`[${requestId}] /start from ${userId} (${firstName})`);
+
+  // Check for existing subscriber
+  const { data: existingSub } = await supabase
     .from("subscribers")
     .select("*, plans(*)")
     .eq("project_id", project.id)
     .eq("telegram_user_id", userId)
     .single();
 
-  const sub = existingSubscriber as Subscriber | null;
-  const safeFirstName = sanitizeForHTML(firstName);
-  const safeProjectName = sanitizeForHTML(project.project_name);
-
-  // Active subscriber - show status
-  if (sub && sub.status === "active") {
-    const expiryDate = sub.expiry_date ? new Date(sub.expiry_date).toLocaleDateString() : "N/A";
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      `👋 Welcome back, <b>${safeFirstName}</b>!\n\n✅ You have an active subscription!\n📅 Expires: ${expiryDate}\n\nUse /status for details.\nUse /renew to extend.`
-    );
-    return;
+  if (existingSub) {
+    const sub = existingSub as Subscriber & { plans: Plan };
+    if (sub.status === "active") {
+      const expiryDate = sub.expiry_date ? new Date(sub.expiry_date).toLocaleDateString() : "N/A";
+      await sendTelegramMessage(
+        project.bot_token,
+        chatId,
+        `✅ <b>You already have an active subscription!</b>\n\n📦 Plan: ${sanitizeForHTML(sub.plans?.plan_name || "Subscription")}\n📅 Valid until: ${expiryDate}\n\nUse /renew to extend your subscription.`
+      );
+      return;
+    } else if (sub.status === "pending_approval") {
+      await sendTelegramMessage(
+        project.bot_token,
+        chatId,
+        "⏳ <b>Your payment is pending approval.</b>\n\nPlease wait while we verify your payment. You'll receive a notification once it's approved."
+      );
+      return;
+    } else if (sub.status === "awaiting_proof") {
+      await sendTelegramMessage(
+        project.bot_token,
+        chatId,
+        "📸 <b>We're waiting for your payment proof.</b>\n\nPlease send a photo of your payment receipt to complete the subscription process."
+      );
+      return;
+    }
   }
 
-  // Pending approval - notify them
-  if (sub && sub.status === "pending_approval") {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      `👋 Welcome back, <b>${safeFirstName}</b>!\n\n🔄 Your payment is pending approval. We'll notify you once reviewed!`
-    );
-    return;
-  }
-
-  // Awaiting proof - remind them
-  if (sub && sub.status === "awaiting_proof") {
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      `👋 Welcome back, <b>${safeFirstName}</b>!\n\n📤 You have a pending payment. Please send your payment proof (screenshot) here.`
-    );
-    return;
-  }
-
-  // Fetch plans
-  const { data: plans } = await supabase
+  // Fetch available plans
+  const { data: plans, error: plansError } = await supabase
     .from("plans")
     .select("*")
     .eq("project_id", project.id)
     .eq("is_active", true)
     .order("price", { ascending: true });
 
-  const typedPlans = (plans || []) as Plan[];
-
-  if (typedPlans.length === 0) {
+  if (plansError || !plans || plans.length === 0) {
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      `👋 Welcome to <b>${safeProjectName}</b>!\n\nSorry, no subscription plans available. Please check back later.`
+      "❌ No subscription plans are currently available. Please contact support."
     );
     return;
   }
 
-  const keyboard = typedPlans.map((plan) => [{
-    text: `${plan.plan_name} - $${plan.price} (${plan.duration_days} days)`,
-    callback_data: `select_plan:${plan.id}`,
-  }]);
+  // Build plan selection message
+  let message = `👋 <b>Welcome to ${sanitizeForHTML(project.project_name)}!</b>\n\n`;
+  message += "📋 <b>Available Plans:</b>\n\n";
 
-  const plansList = typedPlans.map((p) => 
-    `• <b>${sanitizeForHTML(p.plan_name)}</b>\n  💰 $${p.price} for ${p.duration_days} days${p.description ? `\n  ${sanitizeForHTML(p.description)}` : ""}`
-  ).join("\n\n");
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
 
-  await sendTelegramMessage(
-    project.bot_token,
-    chatId,
-    `👋 Welcome to <b>${safeProjectName}</b>, ${safeFirstName}!\n\n🎯 Choose a subscription plan:\n\n${plansList}`,
-    { inline_keyboard: keyboard }
-  );
+  for (const plan of plans) {
+    const typedPlan = plan as Plan;
+    message += `<b>${sanitizeForHTML(typedPlan.plan_name)}</b>\n`;
+    message += `💰 $${typedPlan.price} for ${typedPlan.duration_days} days\n`;
+    if (typedPlan.description) {
+      message += `📝 ${sanitizeForHTML(typedPlan.description)}\n`;
+    }
+    message += "\n";
 
-  // Create or update subscriber record
-  if (sub) {
+    buttons.push([{ text: `${typedPlan.plan_name} - $${typedPlan.price}`, callback_data: `select_plan:${typedPlan.id}` }]);
+  }
+
+  message += "👇 <b>Select a plan to continue:</b>";
+
+  await sendTelegramMessage(project.bot_token, chatId, message, { inline_keyboard: buttons });
+}
+
+async function handlePlanSelection(
+  supabase: any,
+  project: Project,
+  planId: string,
+  userId: number,
+  chatId: number,
+  firstName: string,
+  username: string,
+  requestId: string
+) {
+  console.log(`[${requestId}] Plan selected: ${planId} by ${userId}`);
+
+  // Fetch plan
+  const { data: plan, error: planError } = await supabase
+    .from("plans")
+    .select("*")
+    .eq("id", planId)
+    .eq("project_id", project.id)
+    .eq("is_active", true)
+    .single();
+
+  if (planError || !plan) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ This plan is no longer available. Please use /start to see current options.");
+    return;
+  }
+
+  const typedPlan = plan as Plan;
+
+  // Check payment methods available
+  const manualEnabled = project.manual_payment_config?.enabled ?? false;
+  const stripeEnabled = project.stripe_config?.enabled ?? false;
+
+  if (!manualEnabled && !stripeEnabled) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ No payment methods are currently available. Please contact support.");
+    return;
+  }
+
+  // Create or update subscriber
+  const { data: existingSub } = await supabase
+    .from("subscribers")
+    .select("id")
+    .eq("project_id", project.id)
+    .eq("telegram_user_id", userId)
+    .single();
+
+  let subscriberId: string;
+
+  if (existingSub) {
+    subscriberId = existingSub.id;
     await supabase
       .from("subscribers")
-      .update({ 
-        first_name: firstName, 
-        username: username || null, 
+      .update({
+        plan_id: planId,
         status: "pending_payment",
-        updated_at: new Date().toISOString() 
+        first_name: firstName,
+        username: username,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", sub.id);
+      .eq("id", subscriberId);
   } else {
-    await supabase.from("subscribers").insert({
-      project_id: project.id,
-      telegram_user_id: userId,
-      first_name: firstName,
-      username: username || null,
-      status: "pending_payment",
-    });
+    const { data: newSub, error: insertError } = await supabase
+      .from("subscribers")
+      .insert({
+        project_id: project.id,
+        telegram_user_id: userId,
+        plan_id: planId,
+        status: "pending_payment",
+        first_name: firstName,
+        username: username,
+      })
+      .select()
+      .single();
+
+    if (insertError || !newSub) {
+      console.error(`[${requestId}] Error creating subscriber:`, insertError);
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Error processing your request. Please try again later.");
+      return;
+    }
+    subscriberId = newSub.id;
+  }
+
+  // Show payment method selection
+  let message = `✅ <b>Plan Selected: ${sanitizeForHTML(typedPlan.plan_name)}</b>\n\n`;
+  message += `💰 Amount: $${typedPlan.price}\n`;
+  message += `📅 Duration: ${typedPlan.duration_days} days\n\n`;
+  message += "💳 <b>Choose your payment method:</b>";
+
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
+
+  if (stripeEnabled) {
+    buttons.push([{ text: "💳 Pay with Card (Stripe)", callback_data: `pay_method:${planId}:stripe` }]);
+  }
+  if (manualEnabled) {
+    buttons.push([{ text: "🏦 Manual Payment", callback_data: `pay_method:${planId}:manual` }]);
+  }
+
+  await sendTelegramMessage(project.bot_token, chatId, message, { inline_keyboard: buttons });
+}
+
+async function handlePaymentMethod(
+  supabase: any,
+  project: Project,
+  planId: string,
+  method: string,
+  userId: number,
+  chatId: number,
+  requestId: string
+) {
+  console.log(`[${requestId}] Payment method: ${method} for plan ${planId} by ${userId}`);
+
+  // Get subscriber
+  const { data: subscriber, error: subError } = await supabase
+    .from("subscribers")
+    .select("id")
+    .eq("project_id", project.id)
+    .eq("telegram_user_id", userId)
+    .single();
+
+  if (subError || !subscriber) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Session expired. Please use /start again.");
+    return;
+  }
+
+  const { data: plan } = await supabase
+    .from("plans")
+    .select("*")
+    .eq("id", planId)
+    .single();
+
+  if (!plan) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Plan not found. Please use /start again.");
+    return;
+  }
+
+  const typedPlan = plan as Plan;
+
+  if (method === "stripe") {
+    // Create Stripe checkout session
+    const checkoutUrl = `${supabaseUrl}/functions/v1/create-checkout-session`;
+    
+    try {
+      const response = await fetch(checkoutUrl, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          project_id: project.id,
+          plan_id: planId,
+          subscriber_id: subscriber.id,
+          telegram_user_id: userId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.checkout_url) {
+        await sendTelegramMessage(
+          project.bot_token,
+          chatId,
+          `💳 <b>Stripe Payment</b>\n\n📦 Plan: ${sanitizeForHTML(typedPlan.plan_name)}\n💰 Amount: $${typedPlan.price}\n\n👇 <b>Click below to complete your payment:</b>`,
+          {
+            inline_keyboard: [[{ text: "💳 Pay Now", url: result.checkout_url }]],
+          }
+        );
+      } else {
+        throw new Error(result.error || "Failed to create checkout");
+      }
+    } catch (error) {
+      console.error(`[${requestId}] Error creating checkout:`, error);
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Error creating payment link. Please try again later.");
+    }
+  } else if (method === "manual") {
+    // Manual payment flow
+    const instructions = project.manual_payment_config?.instructions || "Please contact support for payment details.";
+
+    await supabase
+      .from("subscribers")
+      .update({
+        status: "awaiting_proof",
+        payment_method: "manual",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", subscriber.id);
+
+    let message = `🏦 <b>Manual Payment</b>\n\n`;
+    message += `📦 Plan: ${sanitizeForHTML(typedPlan.plan_name)}\n`;
+    message += `💰 Amount: $${typedPlan.price}\n\n`;
+    message += `📋 <b>Payment Instructions:</b>\n${sanitizeForHTML(instructions)}\n\n`;
+    message += `📸 After making payment, please <b>send a photo of your payment receipt</b> to complete the process.`;
+
+    await sendTelegramMessage(project.bot_token, chatId, message);
   }
 }
 
@@ -648,6 +911,8 @@ async function handleStatus(
   chatId: number,
   requestId: string
 ) {
+  console.log(`[${requestId}] /status from ${userId}`);
+
   const { data: subscriber } = await supabase
     .from("subscribers")
     .select("*, plans(*)")
@@ -656,52 +921,45 @@ async function handleStatus(
     .single();
 
   if (!subscriber) {
-    await sendTelegramMessage(project.bot_token, chatId, "❌ You don't have a subscription yet.\n\nUse /start to view plans!");
+    await sendTelegramMessage(
+      project.bot_token,
+      chatId,
+      "❓ You don't have a subscription yet.\n\nUse /start to subscribe!"
+    );
     return;
   }
 
-  const sub = subscriber as Subscriber;
-  const statusInfo: Record<string, { emoji: string; text: string }> = {
-    active: { emoji: "✅", text: "Active" },
-    pending_payment: { emoji: "⏳", text: "Pending Payment" },
-    pending_approval: { emoji: "🔄", text: "Pending Approval" },
-    awaiting_proof: { emoji: "📤", text: "Awaiting Payment Proof" },
-    expired: { emoji: "❌", text: "Expired" },
-    rejected: { emoji: "🚫", text: "Rejected" },
-    suspended: { emoji: "⚠️", text: "Suspended" },
+  const sub = subscriber as Subscriber & { plans: Plan };
+  const statusEmoji: Record<string, string> = {
+    active: "✅",
+    pending_payment: "⏳",
+    pending_approval: "⏳",
+    awaiting_proof: "📸",
+    expired: "❌",
+    rejected: "🚫",
+    suspended: "⛔",
   };
 
-  const { emoji, text } = statusInfo[sub.status] || { emoji: "❓", text: sub.status };
-
-  let message = `📊 <b>Subscription Status</b>\n\n${emoji} Status: <b>${text}</b>\n`;
+  let message = `📊 <b>Your Subscription Status</b>\n\n`;
+  message += `${statusEmoji[sub.status] || "❓"} Status: <b>${sub.status.replace("_", " ").toUpperCase()}</b>\n`;
   
   if (sub.plans) {
     message += `📦 Plan: ${sanitizeForHTML(sub.plans.plan_name)}\n`;
   }
   
-  if (sub.start_date) {
-    message += `📅 Started: ${new Date(sub.start_date).toLocaleDateString()}\n`;
-  }
-  
-  if (sub.expiry_date) {
-    const expiry = new Date(sub.expiry_date);
-    const daysLeft = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    message += `📅 Expires: ${expiry.toLocaleDateString()}\n`;
+  if (sub.status === "active" && sub.expiry_date) {
+    const expiryDate = new Date(sub.expiry_date);
+    const now = new Date();
+    const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (sub.status === "active") {
-      if (daysLeft <= 0) {
-        message += `\n⚠️ Subscription expired! Use /renew to reactivate.`;
-      } else if (daysLeft <= 7) {
-        message += `\n⚠️ Expires in <b>${daysLeft} days</b>! Use /renew to extend.`;
-      }
+    message += `📅 Expires: ${expiryDate.toLocaleDateString()}\n`;
+    message += `⏰ Days remaining: ${daysLeft}\n`;
+    
+    if (daysLeft <= 7) {
+      message += "\n⚠️ <b>Your subscription is expiring soon!</b>\nUse /renew to extend it.";
     }
-  }
-
-  if (sub.status === "suspended") {
-    message += `\n\n⚠️ Your subscription has been suspended. Please contact support.`;
-    if (project.support_contact) {
-      message += `\n📞 Support: ${sanitizeForHTML(project.support_contact)}`;
-    }
+  } else if (sub.status === "expired") {
+    message += "\n💡 Use /renew to reactivate your subscription.";
   }
 
   await sendTelegramMessage(project.bot_token, chatId, message);
@@ -714,6 +972,8 @@ async function handleRenew(
   chatId: number,
   requestId: string
 ) {
+  console.log(`[${requestId}] /renew from ${userId}`);
+
   const { data: subscriber } = await supabase
     .from("subscribers")
     .select("*, plans(*)")
@@ -721,44 +981,18 @@ async function handleRenew(
     .eq("telegram_user_id", userId)
     .single();
 
-  const sub = subscriber as Subscriber | null;
-
-  // Allow renewal for active, expired, and rejected subscribers
-  const renewableStatuses = ["active", "expired", "rejected"];
-  if (!sub || !renewableStatuses.includes(sub.status)) {
-    if (sub?.status === "pending_approval") {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "🔄 Your payment is pending approval. Please wait for verification."
-      );
-      return;
-    }
-    if (sub?.status === "awaiting_proof") {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "📤 Please send your payment proof first to complete your current subscription."
-      );
-      return;
-    }
-    if (sub?.status === "suspended") {
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "⚠️ Your account is suspended. Please contact support to resolve this."
-      );
-      return;
-    }
-    
+  if (!subscriber) {
     await sendTelegramMessage(
       project.bot_token,
       chatId,
-      "❌ You don't have a subscription to renew.\n\nUse /start to subscribe!"
+      "❓ You don't have a subscription yet.\n\nUse /start to subscribe!"
     );
     return;
   }
 
+  const sub = subscriber as Subscriber & { plans: Plan };
+
+  // Fetch available plans
   const { data: plans } = await supabase
     .from("plans")
     .select("*")
@@ -766,301 +1000,39 @@ async function handleRenew(
     .eq("is_active", true)
     .order("price", { ascending: true });
 
-  const typedPlans = (plans || []) as Plan[];
-
-  if (typedPlans.length === 0) {
-    await sendTelegramMessage(project.bot_token, chatId, "Sorry, no plans available at the moment.");
+  if (!plans || plans.length === 0) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ No plans available. Please contact support.");
     return;
   }
 
-  const keyboard = typedPlans.map((plan) => [{
-    text: `${plan.plan_name} - $${plan.price} (${plan.duration_days} days)`,
-    callback_data: `select_plan:${plan.id}`,
-  }]);
-
-  let message = `🔄 <b>${sub.status === "active" ? "Extend" : "Renew"} Your Subscription</b>\n\n`;
+  let message = `🔄 <b>Renew Your Subscription</b>\n\n`;
   
   if (sub.status === "active" && sub.expiry_date) {
-    message += `Current subscription expires: ${new Date(sub.expiry_date).toLocaleDateString()}\n`;
-    message += `New days will be added to your current expiry.\n\n`;
-  } else if (sub.status === "expired") {
-    message += `Your previous subscription has expired.\n\n`;
+    message += `📅 Current expiry: ${new Date(sub.expiry_date).toLocaleDateString()}\n\n`;
+    message += "Renewing will extend your subscription from the current expiry date.\n\n";
   }
   
-  message += `Choose a plan:`;
+  message += "📋 <b>Select a plan:</b>";
 
-  await sendTelegramMessage(project.bot_token, chatId, message, { inline_keyboard: keyboard });
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
+  for (const plan of plans) {
+    const typedPlan = plan as Plan;
+    buttons.push([{ text: `${typedPlan.plan_name} - $${typedPlan.price}`, callback_data: `select_plan:${typedPlan.id}` }]);
+  }
+
+  await sendTelegramMessage(project.bot_token, chatId, message, { inline_keyboard: buttons });
 }
 
 async function handleHelp(project: Project, chatId: number) {
-  const supportInfo = project.support_contact ? `\n\n📞 Support: ${sanitizeForHTML(project.support_contact)}` : "";
-  await sendTelegramMessage(
-    project.bot_token,
-    chatId,
-    `📚 <b>Available Commands</b>\n\n/start - View plans and get started\n/status - Check your subscription\n/renew - Renew or extend subscription\n/help - Show this help message${supportInfo}`
-  );
-}
-
-async function handlePlanSelection(
-  supabase: any,
-  project: Project,
-  planId: string,
-  userId: number,
-  chatId: number,
-  firstName: string,
-  username: string | undefined,
-  requestId: string
-) {
-  const { data: plan, error } = await supabase.from("plans").select("*").eq("id", planId).single();
-
-  if (error || !plan) {
-    console.error(`[${requestId}] Plan not found: ${planId}`);
-    await sendTelegramMessage(project.bot_token, chatId, "❌ Plan not found. Please use /start again.");
-    return;
-  }
-
-  const typedPlan = plan as Plan;
-
-  // Update subscriber with selected plan
-  const { error: updateError } = await supabase
-    .from("subscribers")
-    .update({ 
-      plan_id: planId, 
-      status: "pending_payment", 
-      updated_at: new Date().toISOString() 
-    })
-    .eq("project_id", project.id)
-    .eq("telegram_user_id", userId);
-
-  if (updateError) {
-    console.error(`[${requestId}] Failed to update subscriber:`, updateError);
-  }
-
-  // Build payment method buttons
-  const paymentButtons: { text: string; callback_data: string }[][] = [];
+  let message = `ℹ️ <b>Available Commands</b>\n\n`;
+  message += `/start - Start subscription process\n`;
+  message += `/status - Check your subscription status\n`;
+  message += `/renew - Renew or extend subscription\n`;
+  message += `/help - Show this help message\n`;
   
-  if (project.manual_payment_config?.enabled) {
-    paymentButtons.push([{ text: "💳 Manual Payment", callback_data: `pay_method:${planId}:manual` }]);
-  }
-  if (project.stripe_config?.enabled) {
-    paymentButtons.push([{ text: "💳 Pay with Card", callback_data: `pay_method:${planId}:stripe` }]);
-  }
-  if (paymentButtons.length === 0) {
-    paymentButtons.push([{ text: "💳 Proceed to Payment", callback_data: `pay_method:${planId}:manual` }]);
+  if (project.support_contact) {
+    message += `\n📞 Support: ${sanitizeForHTML(project.support_contact)}`;
   }
 
-  await sendTelegramMessage(
-    project.bot_token,
-    chatId,
-    `✅ Great choice!\n\n📦 <b>${sanitizeForHTML(typedPlan.plan_name)}</b>\n💰 Price: $${typedPlan.price}\n⏱ Duration: ${typedPlan.duration_days} days\n\nSelect your payment method:`,
-    { inline_keyboard: paymentButtons }
-  );
-}
-
-async function handlePaymentMethod(
-  supabase: any,
-  project: Project,
-  planId: string,
-  method: string,
-  userId: number,
-  chatId: number,
-  requestId: string
-) {
-  const { data: plan } = await supabase.from("plans").select("*").eq("id", planId).single();
-
-  if (!plan) {
-    await sendTelegramMessage(project.bot_token, chatId, "❌ Plan not found. Please use /start again.");
-    return;
-  }
-
-  const typedPlan = plan as Plan;
-
-  if (method === "manual") {
-    // Update subscriber status
-    await supabase
-      .from("subscribers")
-      .update({ 
-        status: "awaiting_proof", 
-        payment_method: "manual", 
-        updated_at: new Date().toISOString() 
-      })
-      .eq("project_id", project.id)
-      .eq("telegram_user_id", userId);
-
-    // First, try to fetch client's own payment methods
-    const { data: projectData } = await supabase
-      .from("projects")
-      .select("user_id")
-      .eq("id", project.id)
-      .single();
-
-    let paymentInstructions = "";
-
-    if (projectData?.user_id) {
-      const { data: clientMethods } = await supabase
-        .from("client_payment_methods")
-        .select("*")
-        .eq("user_id", projectData.user_id)
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      if (clientMethods && clientMethods.length > 0) {
-        paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
-
-        for (const pm of clientMethods) {
-          paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type.replace(/_/g, ' ')})\n`;
-
-          const details = pm.details as Record<string, string>;
-          if (pm.method_type === "bank_transfer" && details) {
-            if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
-            if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
-            if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
-            if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
-          } else if (pm.method_type === "binance" && details) {
-            if (details.binance_id) paymentInstructions += `🔢 Binance ID: ${sanitizeForHTML(details.binance_id)}\n`;
-            if (details.binance_email) paymentInstructions += `📧 Email: ${sanitizeForHTML(details.binance_email)}\n`;
-          } else if (pm.method_type === "crypto" && details) {
-            if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
-            if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
-          } else if (details) {
-            for (const [key, value] of Object.entries(details)) {
-              if (value) {
-                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                paymentInstructions += `${formattedKey}: ${sanitizeForHTML(String(value))}\n`;
-              }
-            }
-          }
-
-          if (pm.instructions) {
-            paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
-          }
-          paymentInstructions += "\n";
-        }
-      }
-    }
-
-    // Fallback to platform payment methods if no client methods configured
-    if (!paymentInstructions) {
-      const { data: paymentMethods } = await supabase
-        .from("platform_payment_methods")
-        .select("*")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      if (paymentMethods && paymentMethods.length > 0) {
-        paymentInstructions = "📝 <b>Payment Options:</b>\n\n";
-
-        for (const pm of paymentMethods) {
-          paymentInstructions += `<b>${sanitizeForHTML(pm.method_name)}</b> (${pm.method_type})\n`;
-
-          const details = pm.details as Record<string, string>;
-          if (pm.method_type === "bank_transfer" && details) {
-            if (details.bank_name) paymentInstructions += `🏦 Bank: ${sanitizeForHTML(details.bank_name)}\n`;
-            if (details.account_name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.account_name)}\n`;
-            if (details.account_number) paymentInstructions += `💳 Account: ${details.account_number}\n`;
-            if (details.routing_number) paymentInstructions += `🔢 Routing: ${details.routing_number}\n`;
-          } else if (pm.method_type === "crypto" && details) {
-            if (details.network) paymentInstructions += `🔗 Network: ${sanitizeForHTML(details.network)}\n`;
-            if (details.address) paymentInstructions += `📍 Address: <code>${details.address}</code>\n`;
-          } else if (pm.method_type === "mobile_money" && details) {
-            if (details.provider) paymentInstructions += `📱 Provider: ${sanitizeForHTML(details.provider)}\n`;
-            if (details.phone_number) paymentInstructions += `📞 Number: ${details.phone_number}\n`;
-            if (details.name) paymentInstructions += `👤 Name: ${sanitizeForHTML(details.name)}\n`;
-          } else if (details) {
-            for (const [key, value] of Object.entries(details)) {
-              if (value) {
-                const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                paymentInstructions += `${formattedKey}: ${sanitizeForHTML(String(value))}\n`;
-              }
-            }
-          }
-
-          if (pm.instructions) {
-            paymentInstructions += `📌 ${sanitizeForHTML(pm.instructions)}\n`;
-          }
-          paymentInstructions += "\n";
-        }
-      } else {
-        const instructions = sanitizeForHTML(project.manual_payment_config?.instructions) || 
-          "Please send your payment to complete the subscription.";
-        paymentInstructions = `📝 <b>Instructions:</b>\n${instructions}`;
-      }
-    }
-
-    await sendTelegramMessage(
-      project.bot_token,
-      chatId,
-      `💳 <b>Manual Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n${paymentInstructions}\n✅ After payment, send a screenshot of your payment confirmation here.`
-    );
-  } else if (method === "stripe") {
-    // Get subscriber ID
-    const { data: subscriber } = await supabase
-      .from("subscribers")
-      .select("id")
-      .eq("project_id", project.id)
-      .eq("telegram_user_id", userId)
-      .single();
-
-    if (!subscriber) {
-      await sendTelegramMessage(project.bot_token, chatId, "❌ Subscriber not found. Please use /start again.");
-      return;
-    }
-
-    // Update subscriber status
-    await supabase
-      .from("subscribers")
-      .update({ 
-        status: "pending_payment", 
-        payment_method: "stripe", 
-        updated_at: new Date().toISOString() 
-      })
-      .eq("id", subscriber.id);
-
-    // Call create-checkout-session
-    try {
-      const checkoutResponse = await fetch(`${supabaseUrl}/functions/v1/create-checkout-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({
-          project_id: project.id,
-          plan_id: planId,
-          subscriber_id: subscriber.id,
-          telegram_user_id: userId,
-        }),
-      });
-
-      const checkoutData = await checkoutResponse.json();
-      console.log(`[${requestId}] Checkout session:`, JSON.stringify(checkoutData));
-
-      if (checkoutData.checkout_url) {
-        await sendTelegramMessage(
-          project.bot_token,
-          chatId,
-          `💳 <b>Card Payment</b>\n\nAmount: <b>$${typedPlan.price}</b>\n\n🔗 Click the button below to complete your payment securely:`,
-          {
-            inline_keyboard: [[
-              { text: "💳 Pay Now", url: checkoutData.checkout_url }
-            ]]
-          }
-        );
-      } else {
-        console.error(`[${requestId}] Failed to create checkout session:`, checkoutData);
-        await sendTelegramMessage(
-          project.bot_token,
-          chatId,
-          "❌ Error setting up payment. Please try again or use manual payment."
-        );
-      }
-    } catch (error) {
-      console.error(`[${requestId}] Checkout error:`, error);
-      await sendTelegramMessage(
-        project.bot_token,
-        chatId,
-        "❌ Error setting up payment. Please try again or use manual payment."
-      );
-    }
-  }
+  await sendTelegramMessage(project.bot_token, chatId, message);
 }
