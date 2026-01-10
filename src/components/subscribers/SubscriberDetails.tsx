@@ -100,6 +100,24 @@ const isValidUrl = (str: string | null): boolean => {
   }
 };
 
+// Helper to check if URL is a Supabase storage URL
+const isSupabaseStorageUrl = (url: string): boolean => {
+  return url.includes('/storage/v1/object/');
+};
+
+// Extract bucket and path from Supabase storage URL
+const parseStorageUrl = (url: string): { bucket: string; path: string } | null => {
+  try {
+    const match = url.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)/);
+    if (match) {
+      return { bucket: match[1], path: decodeURIComponent(match[2].split('?')[0]) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: SubscriberDetailsProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -112,13 +130,56 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
   const [showSuspendDialog, setShowSuspendDialog] = useState(false);
   const [showProofDialog, setShowProofDialog] = useState(false);
   const [currentProofUrl, setCurrentProofUrl] = useState<string | null>(null);
+  const [isLoadingProofUrl, setIsLoadingProofUrl] = useState(false);
 
-  // Update current proof URL when subscriber changes (only if valid URL)
+  // Fetch signed URL for payment proof if it's from Supabase storage
   useEffect(() => {
-    if (subscriber) {
-      const validUrl = isValidUrl(subscriber.payment_proof_url) ? subscriber.payment_proof_url : null;
-      setCurrentProofUrl(validUrl);
-    }
+    const fetchSignedUrl = async () => {
+      if (!subscriber?.payment_proof_url) {
+        setCurrentProofUrl(null);
+        return;
+      }
+
+      const originalUrl = subscriber.payment_proof_url;
+      
+      if (!isValidUrl(originalUrl)) {
+        setCurrentProofUrl(null);
+        return;
+      }
+
+      // If it's a Supabase storage URL, get a fresh signed URL
+      if (isSupabaseStorageUrl(originalUrl)) {
+        setIsLoadingProofUrl(true);
+        const parsed = parseStorageUrl(originalUrl);
+        
+        if (parsed) {
+          try {
+            const { data, error } = await supabase.storage
+              .from(parsed.bucket)
+              .createSignedUrl(parsed.path, 3600); // 1 hour expiry
+            
+            if (!error && data?.signedUrl) {
+              setCurrentProofUrl(data.signedUrl);
+            } else {
+              console.warn("Failed to get signed URL:", error);
+              // Fallback to original URL (may be expired)
+              setCurrentProofUrl(originalUrl);
+            }
+          } catch (err) {
+            console.error("Error fetching signed URL:", err);
+            setCurrentProofUrl(originalUrl);
+          }
+        } else {
+          setCurrentProofUrl(originalUrl);
+        }
+        setIsLoadingProofUrl(false);
+      } else {
+        // Not a Supabase URL, use as-is
+        setCurrentProofUrl(originalUrl);
+      }
+    };
+
+    fetchSignedUrl();
   }, [subscriber?.id, subscriber?.payment_proof_url]);
 
   if (!subscriber) return null;

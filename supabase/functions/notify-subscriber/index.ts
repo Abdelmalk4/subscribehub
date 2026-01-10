@@ -505,6 +505,31 @@ serve(async (req) => {
     
     const sendResult = await sendTelegramMessage(botToken, chatId, message, replyMarkup);
 
+    // If sending failed, queue for retry
+    if (!sendResult.ok) {
+      console.warn(`[${requestId}] Message send failed, queuing for retry`);
+      
+      await supabase
+        .from("failed_notifications")
+        .insert({
+          subscriber_id,
+          action,
+          payload: { reason, invite_link, expiry_date, days_remaining },
+          error_message: sendResult.error_code ? `Telegram error ${sendResult.error_code}` : "Send failed",
+          next_retry_at: new Date(Date.now() + 60000).toISOString(), // Retry in 1 minute
+        });
+      
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message_sent: false,
+        queued_for_retry: true,
+        invite_link: generatedInviteLink,
+        kicked: kickResult || undefined,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log(`[${requestId}] ========== RESULT ==========`);
     console.log(`[${requestId}] Message sent: ${sendResult.ok}`);
     console.log(`[${requestId}] Invite link generated: ${!!generatedInviteLink}`);

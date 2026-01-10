@@ -243,25 +243,44 @@ export default function Subscribers() {
     setIsProcessingBulk(true);
     try {
       const ids = Array.from(selectedIds);
-      const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
+      const pendingSubscribers = subscribers.filter(
+        s => ids.includes(s.id) && ["pending_approval", "awaiting_proof"].includes(s.status)
+      );
+      
+      let successCount = 0;
+      for (const sub of pendingSubscribers) {
+        const plan = sub.plans;
+        const durationDays = plan?.duration_days || 30;
+        const startDate = new Date();
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + durationDays);
 
-      const { error } = await supabase
-        .from("subscribers")
-        .update({
-          status: "active",
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          expiry_reminder_sent: false,
-          final_reminder_sent: false,
-        })
-        .in("id", ids)
-        .in("status", ["pending_approval", "awaiting_proof"]);
+        const { error } = await supabase
+          .from("subscribers")
+          .update({
+            status: "active",
+            start_date: startDate.toISOString(),
+            expiry_date: expiryDate.toISOString(),
+            expiry_reminder_sent: false,
+            final_reminder_sent: false,
+          })
+          .eq("id", sub.id)
+          .in("status", ["pending_approval", "awaiting_proof"]);
 
-      if (error) throw error;
+        if (!error) {
+          successCount++;
+          // Send notification for each approved subscriber
+          await supabase.functions.invoke("notify-subscriber", {
+            body: {
+              subscriber_id: sub.id,
+              action: "approved",
+              expiry_date: expiryDate.toISOString(),
+            },
+          });
+        }
+      }
 
-      toast.success(`Approved ${ids.length} subscriber(s)`);
+      toast.success(`Approved ${successCount} subscriber(s) with their plan durations`);
       setSelectedIds(new Set());
       fetchSubscribers();
       fetchStats();

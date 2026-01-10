@@ -244,6 +244,53 @@ export type Database = {
           },
         ]
       }
+      failed_notifications: {
+        Row: {
+          action: string
+          created_at: string
+          error_message: string | null
+          id: string
+          max_retries: number
+          next_retry_at: string
+          payload: Json
+          processed_at: string | null
+          retry_count: number
+          subscriber_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_retries?: number
+          next_retry_at?: string
+          payload?: Json
+          processed_at?: string | null
+          retry_count?: number
+          subscriber_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_retries?: number
+          next_retry_at?: string
+          payload?: Json
+          processed_at?: string | null
+          retry_count?: number
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "failed_notifications_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "subscribers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           admin_notes: string | null
