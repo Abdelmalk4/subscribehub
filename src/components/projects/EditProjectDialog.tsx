@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, Info } from "lucide-react";
+import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, Info, Zap, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -80,6 +80,9 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
   const [webhookStatus, setWebhookStatus] = useState<"idle" | "success" | "error">("idle");
   const [copied, setCopied] = useState(false);
   const [copiedStripeWebhook, setCopiedStripeWebhook] = useState(false);
+  const [isTestingStripe, setIsTestingStripe] = useState(false);
+  const [stripeTestStatus, setStripeTestStatus] = useState<"idle" | "success" | "error">("idle");
+  const [stripeAccountName, setStripeAccountName] = useState<string | null>(null);
 
   const webhookUrl = project
     ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-handler?project_id=${project.id}`
@@ -239,6 +242,46 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setCopiedStripeWebhook(true);
     toast.success("Stripe webhook URL copied!");
     setTimeout(() => setCopiedStripeWebhook(false), 2000);
+  };
+
+  const handleTestStripeConnection = async () => {
+    const secretKey = form.getValues("stripe_secret_key");
+    const existingKey = project?.stripe_config?.secret_key;
+    
+    const keyToTest = secretKey || existingKey;
+    
+    if (!keyToTest) {
+      toast.error("Please enter a Stripe secret key to test");
+      return;
+    }
+
+    setIsTestingStripe(true);
+    setStripeTestStatus("idle");
+    setStripeAccountName(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("test-stripe-connection", {
+        body: { secret_key: keyToTest },
+      });
+
+      if (error) throw error;
+
+      if (data.valid) {
+        setStripeTestStatus("success");
+        setStripeAccountName(data.account_name);
+        toast.success("Stripe connection successful!", {
+          description: `Connected to: ${data.account_name}${data.livemode ? " (Live)" : " (Test)"}`,
+        });
+      } else {
+        setStripeTestStatus("error");
+        toast.error("Invalid Stripe key", { description: data.error });
+      }
+    } catch (error: any) {
+      setStripeTestStatus("error");
+      toast.error("Failed to test Stripe connection", { description: error.message });
+    } finally {
+      setIsTestingStripe(false);
+    }
   };
 
   return (
@@ -464,6 +507,45 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         </FormItem>
                       )}
                     />
+
+                    {/* Test Connection Button */}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        variant={stripeTestStatus === "success" ? "outline" : "secondary"}
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleTestStripeConnection}
+                        disabled={isTestingStripe || (!form.watch("stripe_secret_key") && !project?.stripe_config?.secret_key)}
+                      >
+                        {isTestingStripe ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Testing...
+                          </>
+                        ) : stripeTestStatus === "success" ? (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            Connected
+                          </>
+                        ) : stripeTestStatus === "error" ? (
+                          <>
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            Test Connection
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-4 w-4" />
+                            Test Connection
+                          </>
+                        )}
+                      </Button>
+                      {stripeAccountName && stripeTestStatus === "success" && (
+                        <span className="text-sm text-muted-foreground">
+                          {stripeAccountName}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Stripe Webhook Configuration */}
                     <div className="border-t pt-4 mt-4 space-y-3">
