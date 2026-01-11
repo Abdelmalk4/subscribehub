@@ -8,7 +8,6 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY")!;
 
 // Rate limiting configuration
 const RATE_LIMIT_REQUESTS = 10; // requests per window per subscriber
@@ -119,10 +118,10 @@ serve(async (req) => {
       });
     }
 
-    // Fetch project for context
+    // PHASE 10: Fetch project with Stripe configuration
     const { data: project, error: projectError } = await supabase
       .from("projects")
-      .select("project_name")
+      .select("project_name, stripe_config")
       .eq("id", project_id)
       .single();
 
@@ -134,11 +133,31 @@ serve(async (req) => {
       });
     }
 
+    // PHASE 10: Get project-specific Stripe secret key
+    const stripeConfig = project.stripe_config;
+    if (!stripeConfig?.enabled) {
+      console.error("Stripe not enabled for this project");
+      return new Response(JSON.stringify({ error: "Stripe payments not enabled for this project" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const stripeSecretKey = stripeConfig.secret_key;
+    if (!stripeSecretKey) {
+      console.error("Stripe secret key not configured for project:", project_id);
+      return new Response(JSON.stringify({ error: "Stripe not configured for this project. Please add your Stripe API keys in project settings." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Convert price to cents
     const priceInCents = Math.round(plan.price * 100);
     const currency = (plan.currency || "USD").toLowerCase();
 
-    // Create Stripe Checkout Session
+    // Create Stripe Checkout Session using PROJECT'S Stripe account
+    console.log("Creating Stripe checkout with project-specific keys for project:", project_id);
     const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
       headers: {

@@ -8,8 +8,6 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY")!;
-const stripeWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
 // Rate limiting configuration
 const RATE_LIMIT_REQUESTS = 100; // requests per window
@@ -128,7 +126,11 @@ serve(async (req) => {
     const payload = await req.text();
     const signature = req.headers.get("stripe-signature");
 
-    console.log("Received Stripe webhook");
+    // PHASE 10: Get project_id from URL query params
+    const url = new URL(req.url);
+    const projectId = url.searchParams.get("project_id");
+
+    console.log("Received Stripe webhook for project:", projectId);
 
     // PHASE 6: Rate limiting check (using IP or a general identifier)
     const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
@@ -141,10 +143,37 @@ serve(async (req) => {
       });
     }
 
+    // PHASE 10: Validate project_id is provided
+    if (!projectId) {
+      console.error("Missing project_id in webhook URL");
+      return new Response(JSON.stringify({ error: "Missing project_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PHASE 10: Fetch project's webhook secret
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("*, stripe_config")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !project) {
+      console.error("Project not found:", projectId, projectError);
+      return new Response(JSON.stringify({ error: "Project not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PHASE 10: Get project-specific webhook secret
+    const stripeWebhookSecret = project.stripe_config?.webhook_secret;
+    
     // CRITICAL: Webhook signature verification is MANDATORY
     if (!stripeWebhookSecret) {
-      console.error("STRIPE_WEBHOOK_SECRET not configured - rejecting webhook");
-      return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+      console.error("Stripe webhook secret not configured for project:", projectId);
+      return new Response(JSON.stringify({ error: "Webhook secret not configured for this project" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -160,13 +189,13 @@ serve(async (req) => {
 
     const isValid = await verifyStripeSignature(payload, signature, stripeWebhookSecret);
     if (!isValid) {
-      console.error("Invalid Stripe signature");
+      console.error("Invalid Stripe signature for project:", projectId);
       return new Response(JSON.stringify({ error: "Invalid signature" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log("Stripe signature verified");
+    console.log("Stripe signature verified for project:", projectId);
 
     const event = JSON.parse(payload);
     console.log("Stripe event type:", event.type, "Event ID:", event.id);
@@ -192,9 +221,18 @@ serve(async (req) => {
 
       const subscriberId = session.client_reference_id;
       const metadata = session.metadata || {};
-      const projectId = metadata.project_id;
+      const metaProjectId = metadata.project_id;
       const planId = metadata.plan_id;
       const telegramUserId = metadata.telegram_user_id;
+
+      // Security: Verify project_id from URL matches metadata
+      if (metaProjectId && metaProjectId !== projectId) {
+        console.error("Project ID mismatch:", { urlProjectId: projectId, metaProjectId });
+        return new Response(JSON.stringify({ error: "Project ID mismatch" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       if (!subscriberId) {
         console.error("Missing client_reference_id (subscriber_id)");
@@ -219,22 +257,16 @@ serve(async (req) => {
         });
       }
 
-      console.log("Found subscriber:", subscriber.id, "Current status:", subscriber.status, "Current expiry:", subscriber.expiry_date);
-
-      // Fetch project
-      const { data: project, error: projError } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", subscriber.project_id)
-        .single();
-
-      if (projError || !project) {
-        console.error("Project not found:", projError);
-        return new Response(JSON.stringify({ error: "Project not found" }), {
-          status: 404,
+      // Security: Verify subscriber belongs to the project
+      if (subscriber.project_id !== projectId) {
+        console.error("Subscriber does not belong to project:", { subscriberProjectId: subscriber.project_id, projectId });
+        return new Response(JSON.stringify({ error: "Subscriber-project mismatch" }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      console.log("Found subscriber:", subscriber.id, "Current status:", subscriber.status, "Current expiry:", subscriber.expiry_date);
 
       // Get plan duration
       const plan = subscriber.plans;
@@ -339,7 +371,7 @@ serve(async (req) => {
         event_source: "stripe",
         event_id: event.id,
         event_type: event.type,
-        result: { status: "processed", subscriber_id: subscriberId }
+        result: { status: "processed", subscriber_id: subscriberId, project_id: projectId }
       });
     }
 
