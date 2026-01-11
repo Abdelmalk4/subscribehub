@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink } from "lucide-react";
+import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, Info } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const projectSchema = z.object({
   project_name: z.string().min(3).max(50),
@@ -45,6 +46,7 @@ const projectSchema = z.object({
   stripe_enabled: z.boolean(),
   stripe_public_key: z.string().optional(),
   stripe_secret_key: z.string().optional(),
+  stripe_webhook_secret: z.string().optional(),
   manual_enabled: z.boolean(),
   manual_instructions: z.string().optional(),
 });
@@ -77,9 +79,15 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<"idle" | "success" | "error">("idle");
   const [copied, setCopied] = useState(false);
+  const [copiedStripeWebhook, setCopiedStripeWebhook] = useState(false);
 
   const webhookUrl = project
     ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-handler?project_id=${project.id}`
+    : "";
+
+  // Project-specific Stripe webhook URL
+  const stripeWebhookUrl = project
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-webhook?project_id=${project.id}`
     : "";
 
   const form = useForm<ProjectFormData>({
@@ -90,6 +98,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
       stripe_enabled: false,
       stripe_public_key: "",
       stripe_secret_key: "",
+      stripe_webhook_secret: "",
       manual_enabled: true,
       manual_instructions: "",
     },
@@ -103,6 +112,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
         stripe_enabled: project.stripe_config?.enabled || false,
         stripe_public_key: project.stripe_config?.public_key || "",
         stripe_secret_key: "",
+        stripe_webhook_secret: "",
         manual_enabled: project.manual_payment_config?.enabled ?? true,
         manual_instructions: project.manual_payment_config?.instructions || "",
       });
@@ -115,11 +125,25 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setIsSubmitting(true);
 
     try {
-      const stripeConfig = {
+      // Build stripe_config preserving existing secrets if not updated
+      const stripeConfig: Record<string, any> = {
         enabled: data.stripe_enabled,
         public_key: data.stripe_public_key || "",
-        ...(data.stripe_secret_key ? { secret_key: data.stripe_secret_key } : {}),
       };
+      
+      // Only update secret_key if a new one was provided
+      if (data.stripe_secret_key) {
+        stripeConfig.secret_key = data.stripe_secret_key;
+      } else if (project.stripe_config?.secret_key) {
+        stripeConfig.secret_key = project.stripe_config.secret_key;
+      }
+      
+      // Only update webhook_secret if a new one was provided
+      if (data.stripe_webhook_secret) {
+        stripeConfig.webhook_secret = data.stripe_webhook_secret;
+      } else if (project.stripe_config?.webhook_secret) {
+        stripeConfig.webhook_secret = project.stripe_config.webhook_secret;
+      }
 
       const manualConfig = {
         enabled: data.manual_enabled,
@@ -208,6 +232,13 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setCopied(true);
     toast.success("Webhook URL copied!");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyStripeWebhookUrl = () => {
+    navigator.clipboard.writeText(stripeWebhookUrl);
+    setCopiedStripeWebhook(true);
+    toast.success("Stripe webhook URL copied!");
+    setTimeout(() => setCopiedStripeWebhook(false), 2000);
   };
 
   return (
@@ -386,10 +417,19 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                       />
                     </div>
                     <CardDescription>
-                      Accept credit card payments via Stripe
+                      Accept credit card payments via your own Stripe account
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Important notice about payments going to client's account */}
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        Payments from your subscribers will go <strong>directly to your Stripe account</strong>. 
+                        You need to set up your own Stripe account and enter the API keys below.
+                      </AlertDescription>
+                    </Alert>
+
                     <FormField
                       control={form.control}
                       name="stripe_public_key"
@@ -424,6 +464,73 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         </FormItem>
                       )}
                     />
+
+                    {/* Stripe Webhook Configuration */}
+                    <div className="border-t pt-4 mt-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Webhook className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Stripe Webhook Configuration</span>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Add this URL as a webhook endpoint in your Stripe Dashboard:
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={stripeWebhookUrl}
+                            readOnly
+                            className="text-xs font-mono bg-muted/50"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={copyStripeWebhookUrl}
+                          >
+                            {copiedStripeWebhook ? (
+                              <Check className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name="stripe_webhook_secret"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Webhook Signing Secret</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="whsec_... (leave empty to keep existing)"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Find this in Stripe Dashboard → Developers → Webhooks → Your endpoint → Signing secret
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <Alert className="bg-muted/50">
+                        <Info className="h-4 w-4" />
+                        <AlertDescription className="text-xs">
+                          <strong>Setup steps:</strong>
+                          <ol className="list-decimal ml-4 mt-1 space-y-1">
+                            <li>Go to Stripe Dashboard → Developers → Webhooks</li>
+                            <li>Click "Add endpoint" and paste the webhook URL above</li>
+                            <li>Select event: <code className="bg-background px-1 rounded">checkout.session.completed</code></li>
+                            <li>Copy the "Signing secret" and paste it above</li>
+                          </ol>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
