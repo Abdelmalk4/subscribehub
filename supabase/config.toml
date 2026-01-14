@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.test-stripe-connection]
 verify_jwt = true
+
+[functions.stripe-connect-oauth]
+verify_jwt = true
+
+[functions.stripe-connect-callback]
+verify_jwt = false
+
+[functions.stripe-connect-webhook]
+verify_jwt = false

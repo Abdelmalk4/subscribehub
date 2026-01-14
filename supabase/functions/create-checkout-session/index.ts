@@ -8,10 +8,11 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const stripePlatformSecretKey = Deno.env.get("STRIPE_SECRET_KEY")!;
 
 // Rate limiting configuration
-const RATE_LIMIT_REQUESTS = 10; // requests per window per subscriber
-const RATE_LIMIT_WINDOW_SECONDS = 60; // 1 minute window
+const RATE_LIMIT_REQUESTS = 10;
+const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 interface CreateCheckoutRequest {
   project_id: string;
@@ -32,7 +33,7 @@ async function checkRateLimit(supabase: any, identifier: string): Promise<{ allo
 
     if (error) {
       console.error("Rate limit check error:", error);
-      return { allowed: true }; // Fail open
+      return { allowed: true };
     }
 
     return {
@@ -64,7 +65,7 @@ serve(async (req) => {
       });
     }
 
-    // PHASE 6: Rate limiting check
+    // Rate limiting check
     const rateLimitResult = await checkRateLimit(supabase, `checkout:${subscriber_id}`);
     if (!rateLimitResult.allowed) {
       console.warn(`Rate limit exceeded for subscriber ${subscriber_id}`);
@@ -74,7 +75,7 @@ serve(async (req) => {
       });
     }
 
-    // Security: Verify subscriber exists with matching telegram_user_id and project_id
+    // Verify subscriber exists with matching telegram_user_id and project_id
     const { data: subscriber, error: subscriberError } = await supabase
       .from("subscribers")
       .select("id, status, telegram_user_id")
@@ -92,7 +93,7 @@ serve(async (req) => {
     }
 
     // Verify subscriber is in a valid state for checkout
-    const validStates = ["pending_payment", "expired", "awaiting_proof", "active"]; // Allow active for renewals
+    const validStates = ["pending_payment", "expired", "awaiting_proof", "active"];
     if (!validStates.includes(subscriber.status)) {
       console.error("Subscriber not in valid state for checkout:", subscriber.status);
       return new Response(JSON.stringify({ error: "Subscriber cannot checkout in current state" }), {
@@ -101,7 +102,7 @@ serve(async (req) => {
       });
     }
 
-    // Fetch plan details and verify it belongs to the project
+    // Fetch plan details
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select("*")
@@ -118,7 +119,7 @@ serve(async (req) => {
       });
     }
 
-    // PHASE 10: Fetch project with Stripe configuration
+    // Fetch project with Stripe configuration
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .select("project_name, stripe_config")
@@ -133,7 +134,6 @@ serve(async (req) => {
       });
     }
 
-    // PHASE 10: Get project-specific Stripe secret key
     const stripeConfig = project.stripe_config;
     if (!stripeConfig?.enabled) {
       console.error("Stripe not enabled for this project");
@@ -143,27 +143,52 @@ serve(async (req) => {
       });
     }
 
-    const stripeSecretKey = stripeConfig.secret_key;
-    if (!stripeSecretKey) {
-      console.error("Stripe secret key not configured for project:", project_id);
-      return new Response(JSON.stringify({ error: "Stripe not configured for this project. Please add your Stripe API keys in project settings." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // STRIPE CONNECT: Check if using connected account (new flow) or legacy per-project keys
+    const isConnectAccount = stripeConfig.connected && stripeConfig.stripe_account_id;
+    const stripeAccountId = stripeConfig.stripe_account_id;
+    
+    // Determine which key to use
+    let stripeSecretKey: string;
+    let stripeAccountHeader: string | null = null;
+    
+    if (isConnectAccount) {
+      // Use PLATFORM key with Stripe-Account header for destination charges
+      stripeSecretKey = stripePlatformSecretKey;
+      stripeAccountHeader = stripeAccountId;
+      console.log("Using Stripe Connect for account:", stripeAccountId);
+    } else {
+      // Legacy: Use project's own API key (backwards compatibility)
+      stripeSecretKey = stripeConfig.secret_key;
+      if (!stripeSecretKey) {
+        console.error("Stripe not configured for project:", project_id);
+        return new Response(JSON.stringify({ error: "Stripe not configured. Please connect your Stripe account in project settings." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.log("Using legacy per-project Stripe key for project:", project_id);
     }
 
     // Convert price to cents
     const priceInCents = Math.round(plan.price * 100);
     const currency = (plan.currency || "USD").toLowerCase();
 
-    // Create Stripe Checkout Session using PROJECT'S Stripe account
-    console.log("Creating Stripe checkout with project-specific keys for project:", project_id);
+    // Build headers for Stripe API call
+    const stripeHeaders: Record<string, string> = {
+      "Authorization": `Bearer ${stripeSecretKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    };
+    
+    // Add Stripe-Account header for Connect (destination charges)
+    if (stripeAccountHeader) {
+      stripeHeaders["Stripe-Account"] = stripeAccountHeader;
+    }
+
+    // Create Stripe Checkout Session
+    console.log("Creating Stripe checkout", { isConnect: isConnectAccount, project: project_id });
     const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${stripeSecretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: stripeHeaders,
       body: new URLSearchParams({
         "mode": "payment",
         "success_url": `https://t.me/?payment=success`,
@@ -193,9 +218,9 @@ serve(async (req) => {
     const session = await stripeResponse.json();
     console.log("Checkout session created:", session.id);
 
-    // PHASE 5: Log audit event for checkout creation
+    // Log audit event
     await supabase.rpc("log_audit_event", {
-      p_user_id: null, // No authenticated user (telegram bot flow)
+      p_user_id: null,
       p_action: "checkout_created",
       p_resource_type: "subscriber",
       p_resource_id: subscriber_id,
@@ -206,6 +231,8 @@ serve(async (req) => {
         session_id: session.id,
         amount: plan.price,
         currency: plan.currency || "USD",
+        is_connect: isConnectAccount,
+        connected_account_id: stripeAccountId || null,
       },
     });
 
