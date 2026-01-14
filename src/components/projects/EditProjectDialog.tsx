@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, Info, Zap, CheckCircle2, XCircle } from "lucide-react";
+import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, CheckCircle2, XCircle, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -38,15 +38,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 const projectSchema = z.object({
   project_name: z.string().min(3).max(50),
   support_contact: z.string().optional(),
   stripe_enabled: z.boolean(),
-  stripe_public_key: z.string().optional(),
-  stripe_secret_key: z.string().optional(),
-  stripe_webhook_secret: z.string().optional(),
   manual_enabled: z.boolean(),
   manual_instructions: z.string().optional(),
 });
@@ -79,18 +76,11 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
   const [isSettingWebhook, setIsSettingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<"idle" | "success" | "error">("idle");
   const [copied, setCopied] = useState(false);
-  const [copiedStripeWebhook, setCopiedStripeWebhook] = useState(false);
-  const [isTestingStripe, setIsTestingStripe] = useState(false);
-  const [stripeTestStatus, setStripeTestStatus] = useState<"idle" | "success" | "error">("idle");
-  const [stripeAccountName, setStripeAccountName] = useState<string | null>(null);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isDisconnectingStripe, setIsDisconnectingStripe] = useState(false);
 
   const webhookUrl = project
     ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-handler?project_id=${project.id}`
-    : "";
-
-  // Project-specific Stripe webhook URL
-  const stripeWebhookUrl = project
-    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-webhook?project_id=${project.id}`
     : "";
 
   const form = useForm<ProjectFormData>({
@@ -99,9 +89,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
       project_name: "",
       support_contact: "",
       stripe_enabled: false,
-      stripe_public_key: "",
-      stripe_secret_key: "",
-      stripe_webhook_secret: "",
       manual_enabled: true,
       manual_instructions: "",
     },
@@ -113,14 +100,16 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
         project_name: project.project_name,
         support_contact: project.support_contact || "",
         stripe_enabled: project.stripe_config?.enabled || false,
-        stripe_public_key: project.stripe_config?.public_key || "",
-        stripe_secret_key: "",
-        stripe_webhook_secret: "",
         manual_enabled: project.manual_payment_config?.enabled ?? true,
         manual_instructions: project.manual_payment_config?.instructions || "",
       });
     }
   }, [project, form]);
+
+  // Check if Stripe is connected via Connect
+  const isStripeConnected = project?.stripe_config?.connected && project?.stripe_config?.stripe_account_id;
+  const stripeAccountName = project?.stripe_config?.account_name;
+  const stripeLivemode = project?.stripe_config?.livemode;
 
   const onSubmit = async (data: ProjectFormData) => {
     if (!project) return;
@@ -128,25 +117,11 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setIsSubmitting(true);
 
     try {
-      // Build stripe_config preserving existing secrets if not updated
-      const stripeConfig: Record<string, any> = {
+      // Preserve existing stripe_config, just update enabled flag
+      const stripeConfig = {
+        ...project.stripe_config,
         enabled: data.stripe_enabled,
-        public_key: data.stripe_public_key || "",
       };
-      
-      // Only update secret_key if a new one was provided
-      if (data.stripe_secret_key) {
-        stripeConfig.secret_key = data.stripe_secret_key;
-      } else if (project.stripe_config?.secret_key) {
-        stripeConfig.secret_key = project.stripe_config.secret_key;
-      }
-      
-      // Only update webhook_secret if a new one was provided
-      if (data.stripe_webhook_secret) {
-        stripeConfig.webhook_secret = data.stripe_webhook_secret;
-      } else if (project.stripe_config?.webhook_secret) {
-        stripeConfig.webhook_secret = project.stripe_config.webhook_secret;
-      }
 
       const manualConfig = {
         enabled: data.manual_enabled,
@@ -237,50 +212,65 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyStripeWebhookUrl = () => {
-    navigator.clipboard.writeText(stripeWebhookUrl);
-    setCopiedStripeWebhook(true);
-    toast.success("Stripe webhook URL copied!");
-    setTimeout(() => setCopiedStripeWebhook(false), 2000);
-  };
+  const handleConnectStripe = async () => {
+    if (!project) return;
 
-  const handleTestStripeConnection = async () => {
-    const secretKey = form.getValues("stripe_secret_key");
-    const existingKey = project?.stripe_config?.secret_key;
-    
-    const keyToTest = secretKey || existingKey;
-    
-    if (!keyToTest) {
-      toast.error("Please enter a Stripe secret key to test");
-      return;
-    }
-
-    setIsTestingStripe(true);
-    setStripeTestStatus("idle");
-    setStripeAccountName(null);
+    setIsConnectingStripe(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("test-stripe-connection", {
-        body: { secret_key: keyToTest },
+      const { data, error } = await supabase.functions.invoke("stripe-connect-oauth", {
+        body: { 
+          action: "get_connect_url",
+          project_id: project.id 
+        },
       });
 
       if (error) throw error;
 
-      if (data.valid) {
-        setStripeTestStatus("success");
-        setStripeAccountName(data.account_name);
-        toast.success("Stripe connection successful!", {
-          description: `Connected to: ${data.account_name}${data.livemode ? " (Live)" : " (Test)"}`,
+      if (data.connect_url) {
+        // Open Stripe Connect OAuth flow in new window
+        window.open(data.connect_url, "_blank", "width=600,height=800");
+        toast.info("Complete the Stripe connection in the new window", {
+          description: "Return here after authorizing to see your connection status.",
         });
       } else {
-        setStripeTestStatus("error");
-        toast.error("Invalid Stripe key", { description: data.error });
+        throw new Error("No connect URL received");
       }
     } catch (error: any) {
-      setStripeTestStatus("error");
-      toast.error("Failed to test Stripe connection", { description: error.message });
+      console.error("Stripe connect error:", error);
+      toast.error("Failed to start Stripe connection", { description: error.message });
     } finally {
-      setIsTestingStripe(false);
+      setIsConnectingStripe(false);
+    }
+  };
+
+  const handleDisconnectStripe = async () => {
+    if (!project) return;
+
+    setIsDisconnectingStripe(true);
+
+    try {
+      // Clear stripe_config
+      const { error } = await supabase
+        .from("projects")
+        .update({ 
+          stripe_config: { 
+            enabled: false,
+            connected: false,
+            stripe_account_id: null,
+            account_name: null,
+          } 
+        })
+        .eq("id", project.id);
+
+      if (error) throw error;
+
+      toast.success("Stripe account disconnected");
+      onSuccess(); // Refresh project data
+    } catch (error: any) {
+      toast.error("Failed to disconnect Stripe", { description: error.message });
+    } finally {
+      setIsDisconnectingStripe(false);
     }
   };
 
@@ -453,6 +443,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                               <Switch
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
+                                disabled={!isStripeConnected}
                               />
                             </FormControl>
                           </FormItem>
@@ -460,159 +451,114 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                       />
                     </div>
                     <CardDescription>
-                      Accept credit card payments via your own Stripe account
+                      Accept credit card payments via Stripe
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Important notice about payments going to client's account */}
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertDescription>
-                        Payments from your subscribers will go <strong>directly to your Stripe account</strong>. 
-                        You need to set up your own Stripe account and enter the API keys below.
-                      </AlertDescription>
-                    </Alert>
+                    {isStripeConnected ? (
+                      // Connected state - show account info
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <CheckCircle2 className="h-8 w-8 text-green-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-foreground">Connected to Stripe</span>
+                              <Badge variant={stripeLivemode ? "default" : "secondary"} className="text-xs">
+                                {stripeLivemode ? "Live" : "Test Mode"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {stripeAccountName || "Connected Account"}
+                            </p>
+                          </div>
+                        </div>
 
-                    <FormField
-                      control={form.control}
-                      name="stripe_public_key"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Publishable Key</FormLabel>
-                          <FormControl>
-                            <Input placeholder="pk_live_..." {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="stripe_secret_key"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Secret Key</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="password"
-                              placeholder="sk_live_... (leave empty to keep existing)"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Your secret key is encrypted and stored securely
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {/* Test Connection Button */}
-                    <div className="flex items-center gap-3">
-                      <Button
-                        type="button"
-                        variant={stripeTestStatus === "success" ? "outline" : "secondary"}
-                        size="sm"
-                        className="gap-2"
-                        onClick={handleTestStripeConnection}
-                        disabled={isTestingStripe || (!form.watch("stripe_secret_key") && !project?.stripe_config?.secret_key)}
-                      >
-                        {isTestingStripe ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Testing...
-                          </>
-                        ) : stripeTestStatus === "success" ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            Connected
-                          </>
-                        ) : stripeTestStatus === "error" ? (
-                          <>
-                            <XCircle className="h-4 w-4 text-destructive" />
-                            Test Connection
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="h-4 w-4" />
-                            Test Connection
-                          </>
-                        )}
-                      </Button>
-                      {stripeAccountName && stripeTestStatus === "success" && (
-                        <span className="text-sm text-muted-foreground">
-                          {stripeAccountName}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Stripe Webhook Configuration */}
-                    <div className="border-t pt-4 mt-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Webhook className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Stripe Webhook Configuration</span>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">
-                          Add this URL as a webhook endpoint in your Stripe Dashboard:
+                        <p className="text-sm text-muted-foreground">
+                          Payments from subscribers will go directly to your connected Stripe account. 
+                          No additional setup required!
                         </p>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={stripeWebhookUrl}
-                            readOnly
-                            className="text-xs font-mono bg-muted/50"
-                          />
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              className="gap-2 text-muted-foreground"
+                            >
+                              <Unlink className="h-4 w-4" />
+                              Disconnect Stripe
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Disconnect Stripe Account?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will disable Stripe payments for this project. 
+                                You can reconnect anytime by clicking "Connect with Stripe" again.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleDisconnectStripe}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {isDisconnectingStripe ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Disconnect"
+                                )}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    ) : (
+                      // Not connected state - show connect button
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 border border-border">
+                          <XCircle className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-medium text-foreground">Not Connected</p>
+                            <p className="text-sm text-muted-foreground">
+                              Connect your Stripe account to accept payments
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            Click below to securely connect your Stripe account. 
+                            Payments will go directly to your account — no API keys or webhooks to configure!
+                          </p>
+
                           <Button
                             type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={copyStripeWebhookUrl}
+                            variant="gradient"
+                            className="w-full gap-2"
+                            onClick={handleConnectStripe}
+                            disabled={isConnectingStripe}
                           >
-                            {copiedStripeWebhook ? (
-                              <Check className="h-4 w-4 text-green-500" />
+                            {isConnectingStripe ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Connecting...
+                              </>
                             ) : (
-                              <Copy className="h-4 w-4" />
+                              <>
+                                <CreditCard className="h-4 w-4" />
+                                Connect with Stripe
+                              </>
                             )}
                           </Button>
+
+                          <p className="text-xs text-center text-muted-foreground">
+                            You'll be redirected to Stripe to authorize the connection
+                          </p>
                         </div>
                       </div>
-
-                      <FormField
-                        control={form.control}
-                        name="stripe_webhook_secret"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Webhook Signing Secret</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="password"
-                                placeholder="whsec_... (leave empty to keep existing)"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Find this in Stripe Dashboard → Developers → Webhooks → Your endpoint → Signing secret
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <Alert className="bg-muted/50">
-                        <Info className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          <strong>Setup steps:</strong>
-                          <ol className="list-decimal ml-4 mt-1 space-y-1">
-                            <li>Go to Stripe Dashboard → Developers → Webhooks</li>
-                            <li>Click "Add endpoint" and paste the webhook URL above</li>
-                            <li>Select event: <code className="bg-background px-1 rounded">checkout.session.completed</code></li>
-                            <li>Copy the "Signing secret" and paste it above</li>
-                          </ol>
-                        </AlertDescription>
-                      </Alert>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
