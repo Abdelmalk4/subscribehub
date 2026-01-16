@@ -67,13 +67,36 @@ export function PaymentProofUpload({
 
       const publicUrl = signedData.signedUrl;
 
-      // Update subscriber with proof URL
+      // Update subscriber with proof URL and status to pending_approval
       const { error: updateError } = await supabase
         .from("subscribers")
-        .update({ payment_proof_url: publicUrl })
+        .update({ 
+          payment_proof_url: publicUrl,
+          status: "pending_approval",
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", subscriberId);
 
       if (updateError) throw updateError;
+
+      // Create admin notification for new payment proof
+      const { data: subscriberData } = await supabase
+        .from("subscribers")
+        .select("project_id, first_name, username, telegram_user_id")
+        .eq("id", subscriberId)
+        .single();
+
+      if (subscriberData) {
+        await supabase
+          .from("admin_notifications")
+          .insert({
+            project_id: subscriberData.project_id,
+            notification_type: "payment_proof_submitted",
+            reference_id: subscriberId,
+            reference_type: "subscriber",
+            message: `New payment proof from ${subscriberData.first_name || subscriberData.username || `User ${subscriberData.telegram_user_id}`}`,
+          });
+      }
 
       onUploadComplete(publicUrl);
       toast.success("Payment proof uploaded successfully");
