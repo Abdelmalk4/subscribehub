@@ -260,7 +260,7 @@ serve(async (req) => {
     }
 
     // ========================================
-    // Stage 3: Expire & Kick
+    // Stage 3: Expire & Kick (ATOMIC - only update status if kick succeeds)
     // ========================================
     console.log("Checking for expired subscriptions...");
     const { data: expired, error: expiredError } = await supabase
@@ -276,10 +276,45 @@ serve(async (req) => {
       console.log(`Found ${expired.length} expired subscriptions`);
 
       for (const sub of expired as Subscriber[]) {
-        // Update status to expired first
+        console.log(`Processing expired subscriber ${sub.id} (telegram: ${sub.telegram_user_id})`);
+        
+        // ATOMIC: First attempt to kick from channel
+        const kickSuccess = await kickFromChannel(sub.projects.bot_token, sub.projects.channel_id, sub.telegram_user_id);
+        
+        if (!kickSuccess) {
+          // Kick failed - add to failed_notifications queue for retry
+          console.error(`Failed to kick user ${sub.telegram_user_id} from channel - queuing for retry`);
+          
+          const { error: queueError } = await supabase
+            .from("failed_notifications")
+            .insert({
+              subscriber_id: sub.id,
+              action: "kick_expired",
+              payload: {
+                telegram_user_id: sub.telegram_user_id,
+                channel_id: sub.projects.channel_id,
+                project_name: sub.projects.project_name,
+              },
+              next_retry_at: new Date(now.getTime() + 5 * 60 * 1000).toISOString(), // Retry in 5 minutes
+            });
+          
+          if (queueError) {
+            console.error(`Failed to queue retry for ${sub.id}:`, queueError);
+          }
+          
+          stats.errors++;
+          continue; // Don't update status if kick failed
+        }
+
+        // Kick succeeded - now update status to expired
         const { error: updateError } = await supabase
           .from("subscribers")
-          .update({ status: "expired", updated_at: now.toISOString() })
+          .update({ 
+            status: "expired", 
+            updated_at: now.toISOString(),
+            channel_joined: false,
+            channel_membership_status: "kicked",
+          })
           .eq("id", sub.id);
         
         if (updateError) {
@@ -287,9 +322,6 @@ serve(async (req) => {
           stats.errors++;
           continue;
         }
-
-        // Kick from channel
-        await kickFromChannel(sub.projects.bot_token, sub.projects.channel_id, sub.telegram_user_id);
 
         // Send expiry notification
         const message =
@@ -301,6 +333,7 @@ serve(async (req) => {
 
         await sendTelegramMessage(sub.projects.bot_token, sub.telegram_user_id, message);
         stats.expired++;
+        console.log(`Successfully expired subscriber ${sub.id}`);
       }
     }
 
