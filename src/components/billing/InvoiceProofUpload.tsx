@@ -49,13 +49,13 @@ export function InvoiceProofUpload({
       const filePath = `invoices/${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("payment-proofs")
+        .from("invoice-proofs")
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: signedData, error: signedError } = await supabase.storage
-        .from("payment-proofs")
+        .from("invoice-proofs")
         .createSignedUrl(filePath, 31536000);
 
       if (signedError) throw signedError;
