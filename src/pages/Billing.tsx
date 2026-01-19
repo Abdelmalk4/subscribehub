@@ -1,25 +1,15 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import {
-  Crown,
   Loader2,
-  XCircle,
-  RefreshCw,
-  CreditCard,
-  AlertTriangle,
-  FolderOpen,
-  Users,
   Search,
   Download,
-  Wallet,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -34,7 +24,6 @@ import {
 import { ContactSalesDialog } from "@/components/billing/ContactSalesDialog";
 import { UpgradePlanDialog } from "@/components/billing/UpgradePlanDialog";
 import { PlanCard } from "@/components/billing/PlanCard";
-import { PaymentMethodCard } from "@/components/billing/PaymentMethodCard";
 import { InvoiceProofUpload } from "@/components/billing/InvoiceProofUpload";
 import {
   Table,
@@ -50,9 +39,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface SubscriptionPlan {
   id: string;
@@ -83,27 +72,16 @@ interface Invoice {
   plan?: { plan_name: string } | null;
 }
 
-interface PaymentMethod {
-  id: string;
-  method_name: string;
-  method_type: string;
-  details: Record<string, string>;
-  instructions: string | null;
-}
-
 export default function Billing() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [projectCount, setProjectCount] = useState(0);
-  const [subscriberCount, setSubscriberCount] = useState(0);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
 
   // Filter states
-  const [invoiceFilter, setInvoiceFilter] = useState<"all" | "pending" | "paid">("all");
+  const [invoiceFilter, setInvoiceFilter] = useState<"all" | "active" | "archived">("all");
   const [invoiceSearch, setInvoiceSearch] = useState("");
 
   // Dialog states
@@ -164,12 +142,13 @@ export default function Billing() {
         });
       }
 
-      // Fetch all plans
+      // Fetch all plans (limit to 3 for display)
       const { data: plansData } = await supabase
         .from("subscription_plans")
         .select("*")
         .eq("is_active", true)
-        .order("price", { ascending: true });
+        .order("price", { ascending: true })
+        .limit(3);
 
       if (plansData) {
         setPlans(
@@ -179,30 +158,6 @@ export default function Billing() {
             features: Array.isArray(p.features) ? (p.features as string[]) : [],
           }))
         );
-      }
-
-      // Fetch project count
-      const { count: projCount } = await supabase
-        .from("projects")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-
-      setProjectCount(projCount || 0);
-
-      // Fetch subscriber count
-      const { data: userProjects } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("user_id", user.id);
-
-      if (userProjects && userProjects.length > 0) {
-        const projectIds = userProjects.map((p) => p.id);
-        const { count: subCount } = await supabase
-          .from("subscribers")
-          .select("*", { count: "exact", head: true })
-          .in("project_id", projectIds);
-
-        setSubscriberCount(subCount || 0);
       }
 
       // Fetch invoices
@@ -220,15 +175,6 @@ export default function Billing() {
           }))
         );
       }
-
-      // Fetch platform payment methods
-      const { data: methodsData } = await supabase
-        .from("platform_payment_methods")
-        .select("*")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      setPaymentMethods((methodsData || []) as PaymentMethod[]);
     } catch (error) {
       console.error("Error fetching billing data:", error);
     } finally {
@@ -262,36 +208,6 @@ export default function Billing() {
     }
   };
 
-  const handleReactivateSubscription = async () => {
-    if (!subscription) return;
-
-    setActionLoading(true);
-    try {
-      const newPeriodEnd = new Date();
-      newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
-
-      const { error } = await supabase
-        .from("client_subscriptions")
-        .update({
-          status: subscription.plan ? "active" : "trial",
-          current_period_start: new Date().toISOString(),
-          current_period_end: newPeriodEnd.toISOString(),
-          trial_ends_at: subscription.plan ? null : newPeriodEnd.toISOString(),
-        })
-        .eq("id", subscription.id);
-
-      if (error) throw error;
-
-      toast.success("Subscription reactivated successfully");
-      fetchBillingData();
-    } catch (error) {
-      console.error("Error reactivating subscription:", error);
-      toast.error("Failed to reactivate subscription");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   const openUpgradeDialog = (plan: SubscriptionPlan) => {
     setSelectedPlan(plan);
     setUpgradeDialogOpen(true);
@@ -319,62 +235,20 @@ export default function Billing() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge variant="success">Active</Badge>;
-      case "trial":
-        return <Badge variant="info">Trial</Badge>;
-      case "pending_payment":
-        return <Badge variant="warning">Pending</Badge>;
-      case "expired":
-        return <Badge variant="destructive">Expired</Badge>;
-      case "paid":
-        return <Badge variant="success">Paid</Badge>;
-      case "pending":
-        return <Badge variant="warning">Pending</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const getRenewalDate = () => {
-    if (subscription?.current_period_end) {
-      return format(new Date(subscription.current_period_end), "MMM d, yyyy");
-    }
-    if (subscription?.trial_ends_at) {
-      return format(new Date(subscription.trial_ends_at), "MMM d, yyyy");
-    }
-    return "N/A";
-  };
-
-  const getDaysRemaining = () => {
-    const endDate = subscription?.current_period_end || subscription?.trial_ends_at;
-    if (!endDate) return 0;
-    return Math.max(0, differenceInDays(new Date(endDate), new Date()));
-  };
-
-  const getProjectLimit = () => subscription?.plan?.max_projects || 1;
-  const getSubscriberLimit = () => subscription?.plan?.max_subscribers || 20;
   const getCurrentPlanSlug = () => subscription?.plan?.plan_slug || "";
-  const isExpired = subscription?.status === "expired";
-  const isTrial = subscription?.status === "trial";
-  const daysRemaining = getDaysRemaining();
-  const isNearExpiry = daysRemaining <= 7 && daysRemaining > 0;
 
-  // Get accent color for plan card
-  const getAccentColor = (slug: string): "primary" | "cyan" | "accent" => {
-    if (slug === "pro" || slug === "business") return "cyan";
-    if (slug === "premium" || slug === "enterprise" || slug === "unlimited") return "accent";
-    return "primary";
+  // Get icon color for plan card
+  const getIconColor = (index: number): "pink" | "purple" | "orange" => {
+    const colors: ("pink" | "purple" | "orange")[] = ["pink", "purple", "orange"];
+    return colors[index % colors.length];
   };
 
   // Filter invoices
   const filteredInvoices = invoices.filter((inv) => {
     const matchesFilter =
       invoiceFilter === "all" ||
-      (invoiceFilter === "pending" && inv.status === "pending") ||
-      (invoiceFilter === "paid" && inv.status === "paid");
+      (invoiceFilter === "active" && inv.status === "pending") ||
+      (invoiceFilter === "archived" && inv.status === "paid");
     const matchesSearch =
       !invoiceSearch ||
       inv.invoice_number.toLowerCase().includes(invoiceSearch.toLowerCase()) ||
@@ -391,213 +265,74 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Plans & billing</h1>
-        <p className="text-gray-500 mt-1">
-          Manage your subscription, invoices, and payment methods.
-        </p>
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M9 21V9" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Plans & billing</h1>
+            <p className="text-gray-500 text-sm">Manage your plan and billing history here.</p>
+          </div>
+        </div>
+        <Avatar className="h-9 w-9">
+          <AvatarImage src="" />
+          <AvatarFallback className="bg-gray-100 text-gray-600 text-sm">
+            {user?.email?.charAt(0).toUpperCase() || "U"}
+          </AvatarFallback>
+        </Avatar>
       </div>
 
-      {/* Near Expiry Warning */}
-      {isNearExpiry && !isExpired && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="py-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            <div className="flex-1">
-              <p className="font-medium text-gray-900">
-                Your {isTrial ? "trial" : "subscription"} expires in {daysRemaining} days
-              </p>
-              <p className="text-sm text-gray-600">
-                Upgrade now to keep uninterrupted access to your channels.
-              </p>
-            </div>
-            <Button size="sm">Upgrade Now</Button>
-          </CardContent>
-        </Card>
-      )}
+      {/* Plans Section - 3 columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {plans.map((plan, index) => {
+          const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
+          const isUnlimited = plan.plan_slug === "unlimited";
 
-      {/* Section A: Plan Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Current Plan Card */}
-        <Card>
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Crown className="h-4 w-4 text-amber-500" />
-                Current Plan
-              </CardTitle>
-              {getStatusBadge(subscription?.status || "trial")}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-2xl font-bold text-gray-900">
-                {subscription?.plan?.plan_name || "Free Trial"}
-              </p>
-              <p className="text-sm text-gray-500">
-                {subscription?.plan
-                  ? `$${subscription.plan.price}/month`
-                  : "Limited features"}
-              </p>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              {isExpired ? (
-                <span className="text-error-500">Expired</span>
-              ) : (
-                <>Renews {getRenewalDate()}</>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              {isExpired ? (
-                <Button
-                  size="sm"
-                  onClick={handleReactivateSubscription}
-                  disabled={actionLoading}
-                >
-                  {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Reactivate
-                </Button>
-              ) : (
-                <>
-                  <Button variant="secondary" size="sm">
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Update Payment
-                  </Button>
-                  {(subscription?.plan || subscription?.status === "trial") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCancelDialogOpen(true)}
-                      disabled={actionLoading}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Usage Summary Card */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base font-medium">Usage Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* Projects Usage */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <FolderOpen className="h-4 w-4" />
-                  <span>Projects</span>
-                </div>
-                <span className="font-medium text-gray-900">
-                  {projectCount} / {getProjectLimit() < 0 ? "∞" : getProjectLimit()}
-                </span>
-              </div>
-              <Progress
-                value={getProjectLimit() < 0 ? 0 : (projectCount / getProjectLimit()) * 100}
-                className="h-2"
-              />
-            </div>
-
-            {/* Subscribers Usage */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Users className="h-4 w-4" />
-                  <span>Subscribers</span>
-                </div>
-                <span className="font-medium text-gray-900">
-                  {subscriberCount} / {getSubscriberLimit() < 0 ? "∞" : getSubscriberLimit().toLocaleString()}
-                </span>
-              </div>
-              <Progress
-                value={getSubscriberLimit() < 0 ? 0 : (subscriberCount / getSubscriberLimit()) * 100}
-                className="h-2"
-              />
-            </div>
-
-            {/* Trial Progress (if applicable) */}
-            {isTrial && !isExpired && (
-              <div className="pt-2 border-t border-gray-100">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Trial Progress</span>
-                  <span className="text-gray-500">{daysRemaining} days left</span>
-                </div>
-                <Progress value={((14 - daysRemaining) / 14) * 100} className="h-2" />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Section B: Available Plans */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {plans.map((plan) => {
-            const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
-            const isPopular = plan.plan_slug === "pro";
-            const isUnlimited = plan.plan_slug === "unlimited";
-
+          if (isUnlimited) {
             return (
               <PlanCard
                 key={plan.id}
                 planName={plan.plan_name}
                 price={plan.price}
                 features={plan.features}
-                maxProjects={plan.max_projects}
-                maxSubscribers={plan.max_subscribers}
-                accentColor={getAccentColor(plan.plan_slug)}
+                iconColor={getIconColor(index)}
                 isCurrentPlan={isCurrentPlan}
-                isPopular={isPopular}
-                isUnlimited={isUnlimited}
-                onSelectPlan={() => openUpgradeDialog(plan)}
-                onContactSales={() => setContactSalesOpen(true)}
+                onSelectPlan={() => setContactSalesOpen(true)}
                 disabled={actionLoading}
               />
             );
-          })}
-        </div>
+          }
+
+          return (
+            <PlanCard
+              key={plan.id}
+              planName={plan.plan_name}
+              price={plan.price}
+              features={plan.features}
+              iconColor={getIconColor(index)}
+              isCurrentPlan={isCurrentPlan}
+              onSelectPlan={() => openUpgradeDialog(plan)}
+              disabled={actionLoading}
+            />
+          );
+        })}
       </div>
 
-      {/* Section C: Payment Methods */}
-      {paymentMethods.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Wallet className="h-5 w-5 text-gray-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Payment Methods</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {paymentMethods.map((method) => (
-              <PaymentMethodCard
-                key={method.id}
-                methodName={method.method_name}
-                methodType={method.method_type}
-                details={method.details}
-                instructions={method.instructions}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Section D: Invoices & History */}
+      {/* Previous Invoices Section */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Previous Invoices</h2>
+          <h2 className="text-base font-semibold text-gray-900">Previous invoices</h2>
 
           <div className="flex items-center gap-3">
-            {/* Quick Filter */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
+            {/* Quick Filter Tabs */}
+            <div className="flex bg-gray-100 rounded-lg p-0.5">
               <button
                 onClick={() => setInvoiceFilter("all")}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
@@ -609,24 +344,24 @@ export default function Billing() {
                 View all
               </button>
               <button
-                onClick={() => setInvoiceFilter("pending")}
+                onClick={() => setInvoiceFilter("active")}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  invoiceFilter === "pending"
+                  invoiceFilter === "active"
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                Pending
+                Active
               </button>
               <button
-                onClick={() => setInvoiceFilter("paid")}
+                onClick={() => setInvoiceFilter("archived")}
                 className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  invoiceFilter === "paid"
+                  invoiceFilter === "archived"
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                Completed
+                Archived
               </button>
             </div>
 
@@ -634,67 +369,70 @@ export default function Billing() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search invoices..."
+                placeholder="Search"
                 value={invoiceSearch}
                 onChange={(e) => setInvoiceSearch(e.target.value)}
-                className="pl-9 w-48"
+                className="pl-9 w-40"
               />
             </div>
+
+            {/* Sort Button */}
+            <Button variant="outline" size="sm" className="gap-2">
+              <SlidersHorizontal className="h-4 w-4" />
+              Most recent
+            </Button>
           </div>
         </div>
 
-        <Card>
-          <CardContent className="p-0">
-            {filteredInvoices.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <p>No invoices found.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">
+        {/* Invoices Table */}
+        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+          {filteredInvoices.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>No invoices found.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-gray-100">
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox />
+                  </TableHead>
+                  <TableHead className="font-medium text-gray-500">Invoice</TableHead>
+                  <TableHead className="font-medium text-gray-500">Date</TableHead>
+                  <TableHead className="font-medium text-gray-500">Plan</TableHead>
+                  <TableHead className="font-medium text-gray-500">Amount</TableHead>
+                  <TableHead className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredInvoices.map((invoice) => (
+                  <TableRow key={invoice.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <TableCell className="pl-4">
                       <Checkbox />
-                    </TableHead>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Plan</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    </TableCell>
+                    <TableCell className="font-medium text-gray-900">
+                      {invoice.invoice_number}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {format(new Date(invoice.created_at), "d MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {invoice.plan?.plan_name || "—"}
+                    </TableCell>
+                    <TableCell className="text-gray-900">
+                      USD ${invoice.amount.toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell>
-                        <Checkbox />
-                      </TableCell>
-                      <TableCell className="font-medium text-gray-900">
-                        {invoice.invoice_number}
-                      </TableCell>
-                      <TableCell className="text-gray-500">
-                        {format(new Date(invoice.created_at), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="font-normal">
-                          {invoice.plan?.plan_name || "—"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-gray-900">
-                        ${invoice.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       </div>
 
       {/* Cancel Subscription Dialog */}
