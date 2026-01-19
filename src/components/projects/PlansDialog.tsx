@@ -30,9 +30,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Plus, Loader2, Pencil, Trash2, DollarSign, Calendar } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { 
+  Package, 
+  Plus, 
+  Loader2, 
+  Pencil, 
+  Trash2, 
+  DollarSign, 
+  Calendar,
+  ArrowLeft,
+  Copy,
+  Sparkles,
+  Users,
+  ChevronRight,
+  Info
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +60,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const planSchema = z.object({
   plan_name: z.string().min(2, "Name must be at least 2 characters").max(50),
@@ -56,6 +78,7 @@ const planSchema = z.object({
   }),
   description: z.string().optional(),
   stripe_price_id: z.string().optional(),
+  is_active: z.boolean(),
 });
 
 type PlanFormData = z.infer<typeof planSchema>;
@@ -79,14 +102,20 @@ interface PlansDialogProps {
 }
 
 const DURATION_PRESETS = [
-  { label: "7 days", value: "7" },
-  { label: "30 days", value: "30" },
-  { label: "90 days", value: "90" },
-  { label: "180 days", value: "180" },
-  { label: "365 days", value: "365" },
+  { label: "1 Week", value: "7", icon: "📅" },
+  { label: "1 Month", value: "30", icon: "📆" },
+  { label: "3 Months", value: "90", icon: "🗓️" },
+  { label: "6 Months", value: "180", icon: "📊" },
+  { label: "1 Year", value: "365", icon: "🎯" },
 ];
 
-const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR"];
+const CURRENCIES = [
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "€", name: "Euro" },
+  { code: "GBP", symbol: "£", name: "British Pound" },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham" },
+  { code: "SAR", symbol: "﷼", name: "Saudi Riyal" },
+];
 
 export function PlansDialog({ open, onOpenChange, projectId, projectName }: PlansDialogProps) {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -104,6 +133,7 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
       duration_days: "30",
       description: "",
       stripe_price_id: "",
+      is_active: true,
     },
   });
 
@@ -130,6 +160,8 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
   useEffect(() => {
     if (open && projectId) {
       fetchPlans();
+      setShowForm(false);
+      setEditingPlan(null);
     }
   }, [open, projectId]);
 
@@ -142,6 +174,7 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
       duration_days: plan.duration_days.toString(),
       description: plan.description || "",
       stripe_price_id: plan.stripe_price_id || "",
+      is_active: plan.is_active ?? true,
     });
     setShowForm(true);
   };
@@ -155,6 +188,21 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
       duration_days: "30",
       description: "",
       stripe_price_id: "",
+      is_active: true,
+    });
+    setShowForm(true);
+  };
+
+  const handleDuplicate = (plan: Plan) => {
+    setEditingPlan(null);
+    form.reset({
+      plan_name: `${plan.plan_name} (Copy)`,
+      price: plan.price.toString(),
+      currency: plan.currency || "USD",
+      duration_days: plan.duration_days.toString(),
+      description: plan.description || "",
+      stripe_price_id: "",
+      is_active: true,
     });
     setShowForm(true);
   };
@@ -185,7 +233,7 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
         duration_days: parseInt(data.duration_days),
         description: data.description || null,
         stripe_price_id: data.stripe_price_id || null,
-        is_active: true,
+        is_active: data.is_active,
       };
 
       if (editingPlan) {
@@ -213,52 +261,94 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
   };
 
   const formatPrice = (price: number, currency: string | null) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(price);
+    const curr = CURRENCIES.find(c => c.code === currency) || CURRENCIES[0];
+    return `${curr.symbol}${price.toFixed(2)}`;
   };
+
+  const selectedCurrency = CURRENCIES.find(c => c.code === form.watch("currency")) || CURRENCIES[0];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5 text-primary" />
-            Subscription Plans
-          </SheetTitle>
-          <SheetDescription>
-            Manage subscription plans for {projectName}
-          </SheetDescription>
+          <div className="flex items-center gap-2">
+            {showForm && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 -ml-2"
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingPlan(null);
+                }}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+            <div>
+              <SheetTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-primary" />
+                {showForm 
+                  ? editingPlan 
+                    ? "Edit Plan" 
+                    : "New Plan"
+                  : "Subscription Plans"
+                }
+              </SheetTitle>
+              <SheetDescription>
+                {showForm
+                  ? `Configure your ${editingPlan ? "" : "new "}subscription plan`
+                  : `Manage plans for ${projectName}`
+                }
+              </SheetDescription>
+            </div>
+          </div>
         </SheetHeader>
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6">
           {!showForm ? (
-            <>
+            <div className="space-y-4">
               <Button onClick={handleNewPlan} className="w-full gap-2">
                 <Plus className="h-4 w-4" />
                 Add New Plan
               </Button>
 
               {isLoading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : plans.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No plans yet</p>
-                  <p className="text-sm">Create your first subscription plan</p>
-                </div>
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                      <Sparkles className="h-7 w-7 text-primary" />
+                    </div>
+                    <h3 className="font-semibold text-foreground mb-1">No plans yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4 max-w-[240px]">
+                      Create your first subscription plan to start accepting subscribers
+                    </p>
+                    <Button onClick={handleNewPlan} size="sm" className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Create Your First Plan
+                    </Button>
+                  </CardContent>
+                </Card>
               ) : (
                 <div className="space-y-3">
                   {plans.map((plan) => (
-                    <Card key={plan.id}>
+                    <Card 
+                      key={plan.id} 
+                      className={cn(
+                        "transition-all hover:shadow-sm",
+                        !plan.is_active && "opacity-60"
+                      )}
+                    >
                       <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-foreground">{plan.plan_name}</h3>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-semibold text-foreground truncate">{plan.plan_name}</h3>
                               {plan.is_active ? (
                                 <Badge variant="success" className="text-xs">Active</Badge>
                               ) : (
@@ -266,12 +356,12 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
                               )}
                             </div>
                             <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <DollarSign className="h-3 w-3" />
+                              <span className="flex items-center gap-1 font-medium text-foreground">
+                                <DollarSign className="h-3.5 w-3.5 text-primary" />
                                 {formatPrice(plan.price, plan.currency)}
                               </span>
                               <span className="flex items-center gap-1">
-                                <Calendar className="h-3 w-3" />
+                                <Calendar className="h-3.5 w-3.5" />
                                 {plan.duration_days} days
                               </span>
                             </div>
@@ -282,16 +372,32 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
                             )}
                           </div>
                           <div className="flex items-center gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => handleDuplicate(plan)}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Duplicate</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <Button
                               variant="ghost"
-                              size="icon-sm"
+                              size="icon"
+                              className="h-8 w-8"
                               onClick={() => handleEdit(plan)}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon-sm">
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               </AlertDialogTrigger>
@@ -321,50 +427,25 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
                   ))}
                 </div>
               )}
-            </>
+            </div>
           ) : (
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold">
-                    {editingPlan ? "Edit Plan" : "New Plan"}
-                  </h3>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingPlan(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {/* Plan Details Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Package className="h-4 w-4" />
+                    Plan Details
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="plan_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Plan Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Monthly Access" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="price"
+                    name="plan_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price</FormLabel>
+                        <FormLabel>Plan Name</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="10.00" {...field} />
+                          <Input placeholder="Monthly Access" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -373,112 +454,203 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
 
                   <FormField
                     control={form.control}
-                    name="currency"
+                    name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Currency</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Full access to premium content..."
+                            className="resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Shown to subscribers when selecting a plan</span>
+                          <span>{(field.value || "").length}/200</span>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="is_active"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-medium">Active</FormLabel>
+                          <FormDescription className="text-xs">
+                            Only active plans are shown to subscribers
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* Pricing Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <DollarSign className="h-4 w-4" />
+                    Pricing
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select currency" />
-                            </SelectTrigger>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                                {selectedCurrency.symbol}
+                              </span>
+                              <Input 
+                                type="number" 
+                                step="0.01" 
+                                placeholder="10.00" 
+                                className="pl-7"
+                                {...field} 
+                              />
+                            </div>
                           </FormControl>
-                          <SelectContent>
-                            {CURRENCIES.map((currency) => (
-                              <SelectItem key={currency} value={currency}>
-                                {currency}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="currency"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Currency</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select currency" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {CURRENCIES.map((currency) => (
+                                <SelectItem key={currency.code} value={currency.code}>
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-muted-foreground">{currency.symbol}</span>
+                                    {currency.code}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="duration_days"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Duration</FormLabel>
+                        <div className="grid grid-cols-5 gap-2 mb-3">
+                          {DURATION_PRESETS.map((preset) => (
+                            <Button
+                              key={preset.value}
+                              type="button"
+                              variant={field.value === preset.value ? "default" : "outline"}
+                              size="sm"
+                              className="flex-col h-auto py-2 px-1"
+                              onClick={() => field.onChange(preset.value)}
+                            >
+                              <span className="text-lg mb-0.5">{preset.icon}</span>
+                              <span className="text-[10px]">{preset.label}</span>
+                            </Button>
+                          ))}
+                        </div>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              placeholder="Custom days"
+                              {...field}
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                              days
+                            </span>
+                          </div>
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="duration_days"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duration</FormLabel>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {DURATION_PRESETS.map((preset) => (
-                          <Button
-                            key={preset.value}
-                            type="button"
-                            variant={field.value === preset.value ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => field.onChange(preset.value)}
-                          >
-                            {preset.label}
-                          </Button>
-                        ))}
-                      </div>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Custom days"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>Number of days for this subscription</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* Advanced Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Info className="h-4 w-4" />
+                    Advanced (Optional)
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Full access to premium content..."
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="stripe_price_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stripe Price ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder="price_1234..." {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Link to an existing Stripe price for automated billing
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-                <FormField
-                  control={form.control}
-                  name="stripe_price_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Stripe Price ID (Optional)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="price_1234..." {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        If you have an existing Stripe price
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : editingPlan ? (
-                    "Update Plan"
-                  ) : (
-                    "Create Plan"
-                  )}
-                </Button>
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingPlan(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : editingPlan ? (
+                      "Update Plan"
+                    ) : (
+                      "Create Plan"
+                    )}
+                  </Button>
+                </div>
               </form>
             </Form>
           )}
