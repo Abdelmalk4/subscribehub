@@ -168,17 +168,17 @@ export default function AdminClients() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Client Management</h1>
-        <p className="text-gray-500 text-sm">View and manage all platform clients.</p>
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground">Client Management</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm">View and manage all platform clients.</p>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -207,21 +207,21 @@ export default function AdminClients() {
 
       {/* Clients Table */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
+          <CardTitle className="text-sm sm:text-base font-semibold">
             Clients ({filteredClients.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Client</TableHead>
-                  <TableHead>Projects</TableHead>
-                  <TableHead>Subscribers</TableHead>
+                  <TableHead className="hidden sm:table-cell">Projects</TableHead>
+                  <TableHead className="hidden sm:table-cell">Subscribers</TableHead>
                   <TableHead>Subscription</TableHead>
-                  <TableHead>Joined</TableHead>
+                  <TableHead className="hidden md:table-cell">Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -238,20 +238,20 @@ export default function AdminClients() {
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <div className="flex items-center gap-2">
                         <FolderOpen className="h-4 w-4 text-muted-foreground" />
                         {client.projectCount}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
                         {client.subscriberCount}
                       </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(client.subscriptionStatus)}</TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {client.created_at
                         ? format(new Date(client.created_at), "MMM dd, yyyy")
                         : "N/A"}

@@ -255,15 +255,15 @@ export default function AdminPayments() {
   }
 
   return (
-    <div className="space-y-4 max-w-6xl">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Payment Approvals</h1>
-        <p className="text-gray-500 text-xs">Review and approve client subscription payments.</p>
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground">Payment Approvals</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm">Review and approve client subscription payments.</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <Card
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("pending")}
@@ -323,8 +323,8 @@ export default function AdminPayments() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -352,22 +352,22 @@ export default function AdminPayments() {
 
       {/* Payments Table */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
+          <CardTitle className="text-sm sm:text-base font-semibold">
             Payments ({filteredPayments.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Client</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Method</TableHead>
+                  <TableHead className="hidden sm:table-cell">Plan</TableHead>
+                  <TableHead className="hidden md:table-cell">Method</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="hidden sm:table-cell">Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -387,12 +387,12 @@ export default function AdminPayments() {
                     <TableCell className="font-semibold text-foreground">
                       ${Number(payment.amount).toFixed(2)}
                     </TableCell>
-                    <TableCell>{payment.planName}</TableCell>
-                    <TableCell className="capitalize">
+                    <TableCell className="hidden sm:table-cell">{payment.planName}</TableCell>
+                    <TableCell className="hidden md:table-cell capitalize">
                       {payment.payment_method || "N/A"}
                     </TableCell>
                     <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {payment.created_at
                         ? format(new Date(payment.created_at), "MMM dd, yyyy")
                         : "N/A"}
