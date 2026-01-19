@@ -24,7 +24,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings, CreditCard, Wallet, Loader2, Trash2, Webhook, Check, Copy, ExternalLink, CheckCircle2, XCircle, Unlink } from "lucide-react";
+import { 
+  Settings, 
+  CreditCard, 
+  Wallet, 
+  Loader2, 
+  Trash2, 
+  Webhook, 
+  Check, 
+  Copy, 
+  ExternalLink, 
+  CheckCircle2, 
+  XCircle, 
+  Unlink,
+  AlertTriangle,
+  Info,
+  Zap
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -39,6 +55,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const projectSchema = z.object({
   project_name: z.string().min(3).max(50),
@@ -78,6 +95,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
   const [copied, setCopied] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [isDisconnectingStripe, setIsDisconnectingStripe] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const webhookUrl = project
     ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/telegram-bot-handler?project_id=${project.id}`
@@ -103,8 +121,17 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
         manual_enabled: project.manual_payment_config?.enabled ?? true,
         manual_instructions: project.manual_payment_config?.instructions || "",
       });
+      setHasUnsavedChanges(false);
     }
   }, [project, form]);
+
+  // Track form changes
+  useEffect(() => {
+    const subscription = form.watch(() => {
+      setHasUnsavedChanges(true);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // Check if Stripe is connected via Connect
   const isStripeConnected = project?.stripe_config?.connected && project?.stripe_config?.stripe_account_id;
@@ -141,6 +168,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
       if (error) throw error;
 
       toast.success("Project updated successfully!");
+      setHasUnsavedChanges(false);
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
@@ -228,7 +256,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
       if (error) throw error;
 
       if (data.connect_url) {
-        // Open Stripe Connect OAuth flow in new window
         window.open(data.connect_url, "_blank", "width=600,height=800");
         toast.info("Complete the Stripe connection in the new window", {
           description: "Return here after authorizing to see your connection status.",
@@ -250,7 +277,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     setIsDisconnectingStripe(true);
 
     try {
-      // Clear stripe_config
       const { error } = await supabase
         .from("projects")
         .update({ 
@@ -266,7 +292,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
       if (error) throw error;
 
       toast.success("Stripe account disconnected");
-      onSuccess(); // Refresh project data
+      onSuccess();
     } catch (error: any) {
       toast.error("Failed to disconnect Stripe", { description: error.message });
     } finally {
@@ -274,26 +300,57 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
     }
   };
 
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      // Could add a confirmation dialog here
+    }
+    onOpenChange(false);
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-primary" />
-            Project Settings
-          </SheetTitle>
-          <SheetDescription>
-            Configure your project settings and payment methods.
-          </SheetDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <SheetTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-primary" />
+                Project Settings
+              </SheetTitle>
+              <SheetDescription>
+                Configure settings and payment methods
+              </SheetDescription>
+            </div>
+            {project?.status && (
+              <Badge variant={project.status === "active" ? "success" : "secondary"}>
+                {project.status}
+              </Badge>
+            )}
+          </div>
         </SheetHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-6">
             <Tabs defaultValue="general" className="w-full">
-              <TabsList className="w-full grid grid-cols-3">
-                <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="stripe">Stripe</TabsTrigger>
-                <TabsTrigger value="manual">Manual</TabsTrigger>
+              <TabsList className="w-full grid grid-cols-3 h-10">
+                <TabsTrigger value="general" className="gap-1.5 text-xs sm:text-sm">
+                  <Settings className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">General</span>
+                </TabsTrigger>
+                <TabsTrigger value="stripe" className="gap-1.5 text-xs sm:text-sm relative">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Stripe</span>
+                  {isStripeConnected && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-green-500" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="manual" className="gap-1.5 text-xs sm:text-sm relative">
+                  <Wallet className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Manual</span>
+                  {form.watch("manual_enabled") && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-green-500" />
+                  )}
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="general" className="space-y-4 mt-4">
@@ -329,33 +386,47 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                 />
 
                 {/* Webhook Setup Card */}
-                <Card className="border-primary/30 bg-primary/5">
+                <Card className={cn(
+                  "transition-colors",
+                  webhookStatus === "success" && "border-green-500/50 bg-green-500/5"
+                )}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
-                      <Webhook className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-sm">Telegram Webhook</CardTitle>
+                      <div className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center",
+                        webhookStatus === "success" ? "bg-green-500/10" : "bg-primary/10"
+                      )}>
+                        <Webhook className={cn(
+                          "h-4 w-4",
+                          webhookStatus === "success" ? "text-green-600" : "text-primary"
+                        )} />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm">Telegram Webhook</CardTitle>
+                        <CardDescription className="text-xs">
+                          Auto-receive messages from your bot
+                        </CardDescription>
+                      </div>
                     </div>
-                    <CardDescription>
-                      Configure your bot to receive messages automatically
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2">
                       <Input
                         value={webhookUrl}
                         readOnly
-                        className="text-xs font-mono bg-muted/50"
+                        className="text-xs font-mono bg-muted/50 h-8"
                       />
                       <Button
                         type="button"
                         variant="outline"
                         size="icon"
+                        className="h-8 w-8 flex-shrink-0"
                         onClick={copyWebhookUrl}
                       >
                         {copied ? (
-                          <Check className="h-4 w-4 text-green-500" />
+                          <Check className="h-3.5 w-3.5 text-green-500" />
                         ) : (
-                          <Copy className="h-4 w-4" />
+                          <Copy className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </div>
@@ -374,12 +445,12 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         </>
                       ) : webhookStatus === "success" ? (
                         <>
-                          <Check className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
                           Webhook Active
                         </>
                       ) : (
                         <>
-                          <ExternalLink className="h-4 w-4" />
+                          <Zap className="h-4 w-4" />
                           Setup Webhook
                         </>
                       )}
@@ -387,11 +458,20 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                   </CardContent>
                 </Card>
 
-                <Card className="border-destructive/30 bg-destructive/5">
+                {/* Danger Zone */}
+                <Card className="border-destructive/30">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-destructive text-sm">Danger Zone</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      </div>
+                      <CardTitle className="text-sm text-destructive">Danger Zone</CardTitle>
+                    </div>
                   </CardHeader>
                   <CardContent>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Permanently delete this project and all its data. This action cannot be undone.
+                    </p>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="sm" className="gap-2">
@@ -431,8 +511,21 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-base">Stripe Payments</CardTitle>
+                        <div className={cn(
+                          "h-8 w-8 rounded-lg flex items-center justify-center",
+                          isStripeConnected ? "bg-green-500/10" : "bg-primary/10"
+                        )}>
+                          <CreditCard className={cn(
+                            "h-4 w-4",
+                            isStripeConnected ? "text-green-600" : "text-primary"
+                          )} />
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm">Stripe Payments</CardTitle>
+                          <CardDescription className="text-xs">
+                            Accept credit card payments
+                          </CardDescription>
+                        </div>
                       </div>
                       <FormField
                         control={form.control}
@@ -450,32 +543,27 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         )}
                       />
                     </div>
-                    <CardDescription>
-                      Accept credit card payments via Stripe
-                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {isStripeConnected ? (
-                      // Connected state - show account info
                       <div className="space-y-4">
-                        <div className="flex items-center gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                          <CheckCircle2 className="h-8 w-8 text-green-500 flex-shrink-0" />
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-foreground">Connected to Stripe</span>
+                              <span className="font-medium text-sm text-foreground">Connected</span>
                               <Badge variant={stripeLivemode ? "default" : "secondary"} className="text-xs">
-                                {stripeLivemode ? "Live" : "Test Mode"}
+                                {stripeLivemode ? "Live" : "Test"}
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground truncate">
+                            <p className="text-xs text-muted-foreground truncate">
                               {stripeAccountName || "Connected Account"}
                             </p>
                           </div>
                         </div>
 
-                        <p className="text-sm text-muted-foreground">
-                          Payments from subscribers will go directly to your connected Stripe account. 
-                          No additional setup required!
+                        <p className="text-xs text-muted-foreground">
+                          Payments go directly to your connected Stripe account. No additional setup required!
                         </p>
 
                         <AlertDialog>
@@ -495,7 +583,7 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                               <AlertDialogTitle>Disconnect Stripe Account?</AlertDialogTitle>
                               <AlertDialogDescription>
                                 This will disable Stripe payments for this project. 
-                                You can reconnect anytime by clicking "Connect with Stripe" again.
+                                You can reconnect anytime.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -515,47 +603,44 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         </AlertDialog>
                       </div>
                     ) : (
-                      // Not connected state - show connect button
                       <div className="space-y-4">
-                        <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50 border border-border">
-                          <XCircle className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                          <XCircle className="h-6 w-6 text-muted-foreground flex-shrink-0" />
                           <div className="flex-1">
-                            <p className="font-medium text-foreground">Not Connected</p>
-                            <p className="text-sm text-muted-foreground">
-                              Connect your Stripe account to accept payments
+                            <p className="font-medium text-sm text-foreground">Not Connected</p>
+                            <p className="text-xs text-muted-foreground">
+                              Connect Stripe to accept card payments
                             </p>
                           </div>
                         </div>
 
-                        <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">
-                            Click below to securely connect your Stripe account. 
-                            Payments will go directly to your account — no API keys or webhooks to configure!
-                          </p>
+                        <p className="text-xs text-muted-foreground">
+                          Click below to securely connect your Stripe account. 
+                          Payments go directly to your account — no API keys needed!
+                        </p>
 
-                          <Button
-                            type="button"
-                            className="w-full gap-2"
-                            onClick={handleConnectStripe}
-                            disabled={isConnectingStripe}
-                          >
-                            {isConnectingStripe ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Connecting...
-                              </>
-                            ) : (
-                              <>
-                                <CreditCard className="h-4 w-4" />
-                                Connect with Stripe
-                              </>
-                            )}
-                          </Button>
+                        <Button
+                          type="button"
+                          className="w-full gap-2"
+                          onClick={handleConnectStripe}
+                          disabled={isConnectingStripe}
+                        >
+                          {isConnectingStripe ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Connecting...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4" />
+                              Connect with Stripe
+                            </>
+                          )}
+                        </Button>
 
-                          <p className="text-xs text-center text-muted-foreground">
-                            You'll be redirected to Stripe to authorize the connection
-                          </p>
-                        </div>
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          You'll be redirected to Stripe to authorize the connection
+                        </p>
                       </div>
                     )}
                   </CardContent>
@@ -567,8 +652,15 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Wallet className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-base">Manual Payments</CardTitle>
+                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Wallet className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm">Manual Payments</CardTitle>
+                          <CardDescription className="text-xs">
+                            Bank transfers, crypto, etc.
+                          </CardDescription>
+                        </div>
                       </div>
                       <FormField
                         control={form.control}
@@ -585,9 +677,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                         )}
                       />
                     </div>
-                    <CardDescription>
-                      Accept bank transfers, crypto, or other manual payments
-                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <FormField
@@ -595,17 +684,23 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
                       name="manual_instructions"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Payment Instructions</FormLabel>
+                          <FormLabel className="text-xs">Payment Instructions</FormLabel>
                           <FormControl>
                             <Textarea
-                              placeholder="Enter payment instructions that will be shown to subscribers...&#10;&#10;Example:&#10;Bank: XYZ Bank&#10;Account: 1234567890&#10;&#10;Or send USDT to: 0x..."
-                              className="min-h-[150px]"
+                              placeholder={`Enter payment instructions for subscribers...\n\nExample:\nBank: XYZ Bank\nAccount: 1234567890\n\nOr send USDT to: 0x...`}
+                              className="min-h-[120px] text-sm"
                               {...field}
                             />
                           </FormControl>
-                          <FormDescription>
-                            Markdown formatting is supported
-                          </FormDescription>
+                          <div className="flex items-center justify-between">
+                            <FormDescription className="text-xs flex items-center gap-1">
+                              <Info className="h-3 w-3" />
+                              Markdown supported
+                            </FormDescription>
+                            <span className="text-xs text-muted-foreground">
+                              {(field.value || "").length}/500
+                            </span>
+                          </div>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -615,11 +710,12 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
               </TabsContent>
             </Tabs>
 
-            <div className="flex gap-3 pt-4">
+            {/* Footer */}
+            <div className="flex gap-3 pt-4 border-t">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={handleClose}
                 className="flex-1"
               >
                 Cancel
