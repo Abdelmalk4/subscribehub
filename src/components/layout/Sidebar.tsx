@@ -8,37 +8,22 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  Search,
-  MessageSquare,
   Shield,
   ChevronRight,
-  ChevronLeft,
-  Info,
-  ChevronDown,
-  Zap,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Progress } from "@/components/ui/progress";
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { differenceInDays } from "date-fns";
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  badge?: number;
-}
-
-interface Project {
-  id: string;
-  project_name: string;
 }
 
 const clientNavItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Home", href: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", href: "/projects", icon: FolderOpen },
   { label: "Subscribers", href: "/subscribers", icon: Users },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
@@ -57,63 +42,12 @@ interface SidebarProps {
   isAdmin?: boolean;
 }
 
-interface Subscription {
-  status: string;
-  trial_ends_at: string | null;
-  current_period_end: string | null;
-  subscription_plans: {
-    plan_name: string;
-    max_projects: number;
-    max_subscribers: number;
-  } | null;
-}
-
 export function Sidebar({ isAdmin = false }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isOpen, setIsOpen] = useState(true);
+  const { signOut } = useAuth();
   
   const navItems = isAdmin ? adminNavItems : clientNavItems;
-
-  useEffect(() => {
-    if (user && !isAdmin) {
-      fetchSubscription();
-      fetchProjects();
-    }
-  }, [user, isAdmin]);
-
-  const fetchSubscription = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("client_subscriptions")
-      .select(`
-        status,
-        trial_ends_at,
-        current_period_end,
-        subscription_plans (
-          plan_name,
-          max_projects,
-          max_subscribers
-        )
-      `)
-      .eq("client_id", user.id)
-      .maybeSingle();
-    setSubscription(data as Subscription | null);
-  };
-
-  const fetchProjects = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("projects")
-      .select("id, project_name")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(3);
-    setProjects(data || []);
-  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -121,176 +55,62 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     navigate("/login");
   };
 
-  const getSubscriptionInfo = () => {
-    if (!subscription) {
-      return { planName: "Free Trial", daysLeft: 14, progress: 0 };
-    }
-    const planName = subscription.subscription_plans?.plan_name || "Free Trial";
-    const endDate = subscription.trial_ends_at || subscription.current_period_end;
-    if (!endDate) {
-      return { planName, daysLeft: 0, progress: 100 };
-    }
-    const daysLeft = Math.max(0, differenceInDays(new Date(endDate), new Date()));
-    const totalDays = subscription.status === "trial" ? 14 : 30;
-    const progress = Math.round(((totalDays - daysLeft) / totalDays) * 100);
-    return { planName, daysLeft, progress };
-  };
-
-  const { daysLeft, progress } = getSubscriptionInfo();
-
-  // Dynamic projects list replaces hardcoded favorites
-  const displayProjects = projects.slice(0, 3);
-
   return (
-    <aside className={cn(
-      "sticky top-0 z-30 h-screen shrink-0 border-r border-border bg-card transition-all duration-300",
-      isOpen ? "w-64" : "w-20"
-    )}>
+    <aside className="sticky top-0 z-30 h-screen w-64 shrink-0 border-r border-gray-200 bg-gray-50">
       <div className="h-full flex flex-col">
         {/* Logo Header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-foreground flex items-center justify-center">
-              <span className="font-bold text-background text-sm">S</span>
+        <div className="h-14 flex items-center px-5 border-b border-gray-200">
+          <Link to="/dashboard" className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center">
+              <span className="font-bold text-white text-sm">S</span>
             </div>
-            {isOpen && <span className="font-bold text-foreground tracking-tight">SubscribeHub</span>}
+            <span className="font-semibold text-gray-900">SubscribeHub</span>
           </Link>
-          <button 
-            onClick={() => setIsOpen(!isOpen)} 
-            className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 py-3">
-          <div className="relative group">
-            <Search size={16} className="absolute left-3 top-2.5 text-muted-foreground" />
-            {isOpen ? (
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-full bg-muted border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-foreground placeholder:text-muted-foreground"
-              />
-            ) : (
-              <button className="w-full flex items-center justify-center py-2 hover:bg-muted rounded-lg transition-colors">
-                <Search size={16} className="text-muted-foreground" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-6 custom-scrollbar">
-          {/* Main Menu */}
-          <div className="space-y-1">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.href;
-              const Icon = item.icon;
-              
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <Icon size={18} />
-                  {isOpen && (
-                    <>
-                      <span className="flex-1 text-left">{item.label}</span>
-                      {item.label === "Dashboard" && (
-                        <div className="w-2 h-2 bg-destructive rounded-full" />
-                      )}
-                    </>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* My Projects (Dynamic) */}
-          {isOpen && !isAdmin && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3">
-                My Projects
-                <ChevronDown size={12} />
-              </div>
-              <div className="space-y-1">
-                {displayProjects.length > 0 ? (
-                  displayProjects.map((project) => (
-                    <Link 
-                      key={project.id}
-                      to={`/subscribers?project=${project.id}`}
-                      className="w-full flex items-center gap-3 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Zap size={12} className="text-primary" />
-                      <span className="truncate">{project.project_name}</span>
-                    </Link>
-                  ))
-                ) : (
-                  <p className="px-3 py-1.5 text-xs text-muted-foreground">No projects yet</p>
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            const Icon = item.icon;
+            
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:bg-white hover:text-gray-900"
                 )}
-              </div>
-            </div>
-          )}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-4 border-t border-border space-y-4">
-          {/* Subscription Promo Card */}
-          {!isAdmin && isOpen && (
-            <div className="bg-muted border border-border rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold text-xs text-foreground">{daysLeft} Days Left!</div>
-                <span className="text-[10px] text-muted-foreground">{14 - Math.round((progress / 100) * 14)}/14 days</span>
-              </div>
-              <Progress value={100 - progress} className="h-1.5" />
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Select a plan and unlock unlimited premium features.
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full justify-between text-[10px] font-medium h-7"
-                onClick={() => navigate("/billing")}
-              >
-                Select plan
-                <ChevronRight size={12} />
-              </Button>
-            </div>
-          )}
+        <div className="p-3 border-t border-gray-200">
+          {/* Documentation Link */}
+          <Link
+            to="#"
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-900 transition-colors rounded-lg"
+          >
+            <FileText className="h-5 w-5" />
+            <span>Documentation</span>
+          </Link>
 
-          {/* Footer Links */}
-          <div className="space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
-              <MessageSquare size={18} />
-              {isOpen && <span>Feedback</span>}
-            </button>
-            <Link
-              to="/settings"
-              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
-            >
-              <Settings size={18} />
-              {isOpen && <span>Settings</span>}
-            </Link>
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted">
-              <Info size={18} />
-              {isOpen && <span>Help Center</span>}
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
-            >
-              <LogOut size={18} />
-              {isOpen && <span>Sign Out</span>}
-            </button>
-          </div>
+          {/* Sign Out */}
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-900 transition-colors rounded-lg mt-1"
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     </aside>
