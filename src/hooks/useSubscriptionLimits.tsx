@@ -19,8 +19,8 @@ interface SubscriptionLimits {
 export function useSubscriptionLimits(): SubscriptionLimits {
   const { user } = useAuth();
   const [limits, setLimits] = useState<SubscriptionLimits>({
-    maxProjects: 1,
-    maxSubscribers: 20,
+    maxProjects: 3,
+    maxSubscribers: 50,
     currentProjects: 0,
     currentSubscribers: 0,
     planName: "Free Trial",
@@ -43,7 +43,7 @@ export function useSubscriptionLimits(): SubscriptionLimits {
 
     try {
       // Fetch subscription with plan
-      const { data: subscription } = await supabase
+      const { data: subscription, error: subError } = await supabase
         .from("client_subscriptions")
         .select(`
           status,
@@ -55,13 +55,21 @@ export function useSubscriptionLimits(): SubscriptionLimits {
           )
         `)
         .eq("client_id", user.id)
-        .single();
+        .maybeSingle();
+
+      if (subError) {
+        console.error("Error fetching subscription:", subError);
+      }
 
       // Count projects
-      const { count: projectCount } = await supabase
+      const { count: projectCount, error: projectError } = await supabase
         .from("projects")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id);
+
+      if (projectError) {
+        console.error("Error counting projects:", projectError);
+      }
 
       // Count subscribers across all projects
       const { data: userProjects } = await supabase
@@ -80,29 +88,39 @@ export function useSubscriptionLimits(): SubscriptionLimits {
       }
 
       const plan = subscription?.subscription_plans as any;
-      const maxProjects = plan?.max_projects ?? 1;
-      const maxSubscribers = plan?.max_subscribers ?? 20;
       const status = subscription?.status || "trial";
       const trialEndsAt = subscription?.trial_ends_at;
       const isTrialExpired = status === "trial" && trialEndsAt && new Date(trialEndsAt) < new Date();
       const isExpired = status === "expired" || isTrialExpired;
 
+      // Get limits from plan, with reasonable defaults for trial users
+      // A null subscription (new user) gets trial defaults
+      const maxProjects = plan?.max_projects ?? 3;
+      const maxSubscribers = plan?.max_subscribers ?? 50;
+      const currentProjects = projectCount || 0;
+
       setLimits({
         maxProjects,
         maxSubscribers,
-        currentProjects: projectCount || 0,
+        currentProjects,
         currentSubscribers: subscriberCount,
         planName: plan?.plan_name || "Free Trial",
         status,
         isTrialExpired: !!isTrialExpired,
         trialEndsAt,
-        canAddProject: !isExpired && (maxProjects < 0 || (projectCount || 0) < maxProjects),
+        canAddProject: !isExpired && (maxProjects < 0 || currentProjects < maxProjects),
         canAddSubscriber: !isExpired && (maxSubscribers < 0 || subscriberCount < maxSubscribers),
         loading: false,
       });
     } catch (error) {
       console.error("Failed to fetch subscription limits:", error);
-      setLimits((prev) => ({ ...prev, loading: false }));
+      // On error, still allow actions but with conservative defaults
+      setLimits((prev) => ({ 
+        ...prev, 
+        loading: false,
+        canAddProject: true, // Allow on error to not block users
+        canAddSubscriber: true,
+      }));
     }
   };
 
