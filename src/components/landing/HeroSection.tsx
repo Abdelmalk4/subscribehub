@@ -17,47 +17,47 @@ export default function HeroSection() {
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center max-w-4xl mx-auto mb-16">
-          <Badge variant="glass-primary" className="mb-6 px-4 py-2 text-sm">
-            <Rocket className="h-4 w-4 mr-2" />
+        <div className="text-center max-w-4xl mx-auto mb-12">
+          <Badge variant="glass-primary" className="mb-4 px-3 py-1.5 text-xs">
+            <Rocket className="h-3.5 w-3.5 mr-1.5" />
             The #1 Telegram Monetization Platform
           </Badge>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground leading-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-4">
             Monetize Your Telegram Channels
             <br />
             <span className="gradient-text">— Effortlessly</span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
             The all-in-one platform to manage subscribers, process payments, and grow your community.
             Automate everything while you focus on creating content.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
             <Link to="/signup">
-              <Button size="xl" className="gap-2 min-w-[220px]">
-                <Rocket className="h-5 w-5" />
+              <Button size="lg" className="gap-2 min-w-[180px]">
+                <Rocket className="h-4 w-4" />
                 Start Free Trial
               </Button>
             </Link>
-            <Button variant="secondary" size="xl" className="min-w-[200px] gap-2">
-              <Play className="h-5 w-5" />
+            <Button variant="secondary" size="lg" className="min-w-[160px] gap-2">
+              <Play className="h-4 w-4" />
               Watch Demo
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-success" />
+          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5 text-success" />
               No credit card required
             </span>
-            <span className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-success" />
+            <span className="flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5 text-success" />
               14-day free trial
             </span>
-            <span className="flex items-center gap-2">
-              <Check className="h-4 w-4 text-success" />
+            <span className="flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5 text-success" />
               Cancel anytime
             </span>
           </div>
@@ -66,45 +66,45 @@ export default function HeroSection() {
         {/* Dashboard Preview */}
         <div className="relative max-w-5xl mx-auto">
           <div className="absolute -inset-4 bg-gradient-to-r from-primary/20 via-secondary/20 to-primary/20 rounded-3xl blur-2xl opacity-50" />
-          <div className="relative glass-card rounded-2xl p-4 sm:p-6 animate-float-slow">
-            <div className="bg-card/80 rounded-xl p-4 sm:p-6 border border-border/40">
+          <div className="relative glass-card rounded-xl p-3 sm:p-4 animate-float-slow">
+            <div className="bg-card/80 rounded-lg p-3 sm:p-4 border border-border/40">
               {/* Mock Dashboard Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                    <Rocket className="h-5 w-5 text-primary-foreground" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                    <Rocket className="h-4 w-4 text-primary-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">Crypto Signals Pro</p>
-                    <p className="text-xs text-muted-foreground">Premium Channel</p>
+                    <p className="text-xs font-semibold text-foreground">Crypto Signals Pro</p>
+                    <p className="text-[10px] text-muted-foreground">Premium Channel</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                <Badge variant="outline" className="bg-success/20 text-success border-success/30 text-[10px]">
                   Live
                 </Badge>
               </div>
 
               {/* Mock Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                 {[
                   { icon: Users, label: "Subscribers", value: "1,234", change: "+12%" },
                   { icon: CreditCard, label: "Revenue", value: "$8,456", change: "+23%" },
                   { icon: BarChart3, label: "Growth", value: "18%", change: "+5%" },
                   { icon: Bell, label: "Renewals", value: "89%", change: "+3%" },
                 ].map((stat) => (
-                  <div key={stat.label} className="glass-panel rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <stat.icon className="h-4 w-4 text-primary" />
-                      <span className="text-xs text-muted-foreground">{stat.label}</span>
+                  <div key={stat.label} className="glass-panel rounded-md p-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <stat.icon className="h-3 w-3 text-primary" />
+                      <span className="text-[10px] text-muted-foreground">{stat.label}</span>
                     </div>
-                    <p className="text-xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-xs text-success">{stat.change}</p>
+                    <p className="text-sm font-bold text-foreground">{stat.value}</p>
+                    <p className="text-[10px] text-success">{stat.change}</p>
                   </div>
                 ))}
               </div>
 
               {/* Mock Chart */}
-              <div className="h-32 sm:h-40 bg-card/50 rounded-lg border border-border/30 flex items-end justify-around p-4 gap-2">
+              <div className="h-24 sm:h-28 bg-card/50 rounded-md border border-border/30 flex items-end justify-around p-2 gap-1">
                 {[40, 65, 45, 80, 55, 90, 75, 85, 60, 95, 70, 88].map((height, i) => (
                   <div
                     key={i}

@@ -60,22 +60,22 @@ export default function FeaturesSection() {
   }, []);
 
   return (
-    <section id="features" ref={sectionRef} className="py-24 px-4 sm:px-6 lg:px-8">
+    <section id="features" ref={sectionRef} className="py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <Badge variant="secondary" className="mb-4">
-            <Zap className="h-3.5 w-3.5 mr-1.5" />
+        <div className="text-center mb-12">
+          <Badge variant="secondary" className="mb-3 text-[10px]">
+            <Zap className="h-3 w-3 mr-1" />
             Features
           </Badge>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-3">
             Everything You Need to <span className="gradient-text">Scale</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
             A complete toolkit for content creators who want to monetize their Telegram presence.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {features.map((feature, index) => (
             <Card
               key={feature.title}
@@ -84,12 +84,12 @@ export default function FeaturesSection() {
               }`}
               style={{ transitionDelay: `${index * 100}ms` }}
             >
-              <CardContent className="pt-6 pb-6">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-all duration-300">
-                  <feature.icon className="h-6 w-6 text-primary" />
+              <CardContent className="pt-4 pb-4">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-all duration-300">
+                  <feature.icon className="h-4 w-4 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
+                <h3 className="text-base font-semibold text-foreground mb-1.5">{feature.title}</h3>
+                <p className="text-xs text-muted-foreground">{feature.description}</p>
               </CardContent>
             </Card>
           ))}

@@ -200,32 +200,32 @@ export default function AdminOverview() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-4 max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Platform Overview</h1>
-          <p className="text-gray-500 text-sm">Monitor platform-wide statistics and performance.</p>
+          <h1 className="text-lg font-semibold text-gray-900">Platform Overview</h1>
+          <p className="text-gray-500 text-xs">Monitor platform-wide statistics and performance.</p>
         </div>
-        <Badge variant="outline" className="text-primary border-primary">
+        <Badge variant="outline" className="text-primary border-primary text-[10px]">
           Super Admin
         </Badge>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {kpiCards.map((card) => (
           <Card key={card.title}>
-            <CardContent className="p-6">
+            <CardContent className="p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">{card.title}</p>
-                  <p className="text-2xl font-bold text-foreground mt-1">
+                  <p className="text-xs text-muted-foreground">{card.title}</p>
+                  <p className="text-lg font-bold text-foreground mt-0.5">
                     {card.value}
                   </p>
                 </div>
-                <div className={`p-3 rounded-xl ${card.bgColor}`}>
-                  <card.icon className={`h-6 w-6 ${card.color}`} />
+                <div className={`p-2 rounded-lg ${card.bgColor}`}>
+                  <card.icon className={`h-4 w-4 ${card.color}`} />
                 </div>
               </div>
             </CardContent>
@@ -234,14 +234,14 @@ export default function AdminOverview() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Growth Chart */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">Platform Growth</CardTitle>
+            <CardTitle className="text-sm font-semibold">Platform Growth</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={growthData}>
                   <defs>
@@ -255,13 +255,14 @@ export default function AdminOverview() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
                     }}
                   />
                   <Area
@@ -270,7 +271,7 @@ export default function AdminOverview() {
                     stroke="hsl(var(--primary))"
                     fillOpacity={1}
                     fill="url(#colorClients)"
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                     name="Clients"
                   />
                   <Area
@@ -279,7 +280,7 @@ export default function AdminOverview() {
                     stroke="hsl(var(--secondary))"
                     fillOpacity={1}
                     fill="url(#colorSubscribers)"
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                     name="Subscribers"
                   />
                 </AreaChart>
@@ -291,23 +292,25 @@ export default function AdminOverview() {
         {/* Subscription Distribution */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold">Client Subscriptions</CardTitle>
+            <CardTitle className="text-sm font-semibold">Client Subscriptions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={subscriptionDistribution}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={40}
+                    outerRadius={70}
                     paddingAngle={5}
                     dataKey="value"
                     label={({ name, percent }) =>
                       `${name} ${(percent * 100).toFixed(0)}%`
                     }
+                    labelLine={false}
+                    fontSize={10}
                   >
                     {subscriptionDistribution.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -317,7 +320,8 @@ export default function AdminOverview() {
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
                     }}
                   />
                 </PieChart>
