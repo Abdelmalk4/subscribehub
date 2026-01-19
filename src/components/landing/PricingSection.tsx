@@ -105,7 +105,7 @@ export default function PricingSection() {
               Yearly
             </span>
             {isYearly && (
-              <Badge variant="glass-primary" className="ml-1 text-[10px]">
+              <Badge variant="info" className="ml-1 text-[10px]">
                 Save 20%
               </Badge>
             )}
@@ -168,9 +168,9 @@ export default function PricingSection() {
 
                 <Link to={plan.monthlyPrice !== null ? "/signup" : "/contact"}>
                   <Button
-                    variant={plan.popular ? "gradient" : "glass"}
+                    variant={plan.popular ? "default" : "outline"}
                     size="sm"
-                    className={`w-full gap-1.5 ${plan.popular ? "btn-glow" : ""}`}
+                    className="w-full gap-1.5"
                   >
                     {plan.monthlyPrice !== null ? "Start Free Trial" : "Talk to Sales"}
                     <ArrowRight className="h-3.5 w-3.5" />

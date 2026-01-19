@@ -12,16 +12,13 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         destructive: "border-transparent bg-destructive text-destructive-foreground",
         outline: "text-foreground border-border",
-        // Status badges with glow effect
-        success: "bg-success/20 text-success border-success/30 backdrop-blur-sm",
-        warning: "bg-warning/20 text-warning border-warning/30 backdrop-blur-sm",
-        error: "bg-destructive/20 text-destructive border-destructive/30 backdrop-blur-sm",
-        info: "bg-primary/20 text-primary border-primary/30 backdrop-blur-sm",
-        pending: "bg-secondary/20 text-secondary border-secondary/30 backdrop-blur-sm",
-        muted: "bg-muted/50 text-muted-foreground border-muted backdrop-blur-sm",
-        // Glass variants
-        glass: "bg-card/30 backdrop-blur-lg border-border/50 text-foreground",
-        "glass-primary": "bg-primary/10 backdrop-blur-lg border-primary/30 text-primary",
+        // Status badges - solid colors without glassmorphism
+        success: "bg-success/20 text-success border-success/30",
+        warning: "bg-warning/20 text-warning border-warning/30",
+        error: "bg-destructive/20 text-destructive border-destructive/30",
+        info: "bg-primary/20 text-primary border-primary/30",
+        pending: "bg-secondary/20 text-secondary border-secondary/30",
+        muted: "bg-muted text-muted-foreground border-muted",
       },
     },
     defaultVariants: {

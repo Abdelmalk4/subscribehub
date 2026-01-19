@@ -9,10 +9,8 @@ import {
   CreditCard,
   LogOut,
   Shield,
-  ChevronRight,
   FileText,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -40,9 +38,10 @@ const adminNavItems: NavItem[] = [
 
 interface SidebarProps {
   isAdmin?: boolean;
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ isAdmin = false }: SidebarProps) {
+export function Sidebar({ isAdmin = false, onNavigate }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
@@ -55,16 +54,22 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     navigate("/login");
   };
 
+  const handleNavClick = () => {
+    if (onNavigate) {
+      onNavigate();
+    }
+  };
+
   return (
-    <aside className="sticky top-0 z-30 h-screen w-52 shrink-0 border-r border-gray-200 bg-gray-50">
+    <aside className="h-full w-full md:w-52 shrink-0 border-r border-border bg-muted/30">
       <div className="h-full flex flex-col">
         {/* Logo Header */}
-        <div className="h-11 flex items-center px-3 border-b border-gray-200">
-          <Link to="/dashboard" className="flex items-center gap-2">
+        <div className="h-11 flex items-center px-3 border-b border-border">
+          <Link to="/dashboard" className="flex items-center gap-2" onClick={handleNavClick}>
             <div className="h-6 w-6 rounded-md bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center">
               <span className="font-bold text-white text-xs">S</span>
             </div>
-            <span className="font-semibold text-gray-900 text-sm">SubscribeHub</span>
+            <span className="font-semibold text-foreground text-sm">SubscribeHub</span>
           </Link>
         </div>
 
@@ -78,11 +83,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
               <Link
                 key={item.href}
                 to={item.href}
+                onClick={handleNavClick}
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors",
                   isActive
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:bg-white hover:text-gray-900"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground"
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -93,11 +99,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-2 border-t border-gray-200">
+        <div className="p-2 border-t border-border">
           {/* Documentation Link */}
           <Link
             to="#"
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-900 transition-colors rounded-md"
+            onClick={handleNavClick}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground transition-colors rounded-md"
           >
             <FileText className="h-3.5 w-3.5" />
             <span>Documentation</span>
@@ -106,7 +113,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           {/* Sign Out */}
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-900 transition-colors rounded-md mt-0.5"
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground transition-colors rounded-md mt-0.5"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span>Sign Out</span>
