@@ -702,16 +702,16 @@ export default function Subscribers() {
   const someSelected = selectedIds.size > 0 && selectedIds.size < subscribers.length;
 
   const renderSubscribersTable = (showExtendColumn: boolean = false) => (
-    <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+    <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
       {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center h-48">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : subscribers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-          <Users className="h-12 w-12 mb-2 opacity-50" />
-          <p className="font-semibold">No subscribers found</p>
-          <p className="text-sm">Try adjusting your filters</p>
+        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+          <Users className="h-8 w-8 mb-1.5 opacity-50" />
+          <p className="font-semibold text-xs">No subscribers found</p>
+          <p className="text-[10px]">Try adjusting your filters</p>
         </div>
       ) : (
         <>
@@ -719,24 +719,24 @@ export default function Subscribers() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50 border-b border-border hover:bg-muted/50">
-                  <TableHead className="w-12 px-6 py-4">
+                  <TableHead className="w-8 px-3 py-2">
                     <Checkbox
                       checked={allSelected}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all"
-                      className="rounded"
+                      className="rounded scale-75"
                     />
                   </TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Name</TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Project</TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Plan</TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Channel</TableHead>
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Expiry</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Name</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Project</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Plan</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Channel</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Expiry</TableHead>
                   {showExtendColumn && (
-                    <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Extend</TableHead>
+                    <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Extend</TableHead>
                   )}
-                  <TableHead className="px-6 py-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right">Actions</TableHead>
+                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border">
@@ -751,143 +751,143 @@ export default function Subscribers() {
                         selectedIds.has(subscriber.id) ? "bg-muted/30" : ""
                       }`}
                     >
-                      <TableCell className="px-6 py-4">
+                      <TableCell className="px-3 py-2">
                         <Checkbox
                           checked={selectedIds.has(subscriber.id)}
                           onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
                           aria-label={`Select ${subscriber.username || subscriber.first_name}`}
-                          className="rounded"
+                          className="rounded scale-75"
                         />
                       </TableCell>
-                      <TableCell className="px-6 py-4">
+                      <TableCell className="px-3 py-2">
                         <div
-                          className="flex items-center gap-3 cursor-pointer"
+                          className="flex items-center gap-2 cursor-pointer"
                           onClick={() => handleViewDetails(subscriber)}
                         >
                           <img 
-                            src={`https://picsum.photos/seed/${subscriber.telegram_user_id}/32/32`} 
-                            className="w-8 h-8 rounded-full border border-border" 
+                            src={`https://picsum.photos/seed/${subscriber.telegram_user_id}/24/24`} 
+                            className="w-6 h-6 rounded-full border border-border" 
                             alt={subscriber.first_name || subscriber.username || "User"} 
                           />
                           <div>
-                            <span className="font-semibold text-sm text-foreground">
+                            <span className="font-semibold text-xs text-foreground">
                               {subscriber.first_name || subscriber.username || "Unknown"}
                             </span>
                             {subscriber.username && (
-                              <p className="text-xs text-muted-foreground">@{subscriber.username}</p>
+                              <p className="text-[10px] text-muted-foreground">@{subscriber.username}</p>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="px-6 py-4 text-sm text-muted-foreground">
+                      <TableCell className="px-3 py-2 text-xs text-muted-foreground">
                         {subscriber.projects?.project_name || "—"}
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded text-[10px] font-semibold">
+                      <TableCell className="px-3 py-2">
+                        <span className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded text-[10px] font-semibold">
                           {subscriber.plans?.plan_name || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      <TableCell className="px-3 py-2">
+                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
                           subscriber.status === 'active' 
                             ? 'bg-success/10 text-success border border-success/20' 
                             : subscriber.status === 'expired' || subscriber.status === 'rejected'
                             ? 'bg-muted text-muted-foreground border border-border'
                             : 'bg-warning/10 text-warning border border-warning/20'
                         }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${
+                          <div className={`w-1 h-1 rounded-full ${
                             subscriber.status === 'active' ? 'bg-success' : 
                             subscriber.status === 'expired' || subscriber.status === 'rejected' ? 'bg-muted-foreground' : 'bg-warning'
                           }`} />
                           {status.label}
                         </div>
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <TableCell className="px-3 py-2">
+                        <div className="flex items-center gap-1">
                           {getChannelStatusBadge(subscriber)}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleCheckMembership(subscriber)}
                             disabled={isCheckingMembership.has(subscriber.id)}
-                            className="h-6 w-6 p-0"
+                            className="h-5 w-5 p-0"
                           >
                             {isCheckingMembership.has(subscriber.id) ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
                             ) : (
-                              <RefreshCw className="h-3 w-3" />
+                              <RefreshCw className="h-2.5 w-2.5" />
                             )}
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell className="px-6 py-4">
-                        <div className="text-sm text-muted-foreground">
+                      <TableCell className="px-3 py-2">
+                        <div className="text-xs text-muted-foreground">
                           {expiryInfo.text}
                           {expiryInfo.daysLeft !== null && expiryInfo.daysLeft >= 0 && expiryInfo.daysLeft <= 7 && (
-                            <span className={`block text-xs ${expiryInfo.isUrgent ? "text-warning" : ""}`}>
+                            <span className={`block text-[10px] ${expiryInfo.isUrgent ? "text-warning" : ""}`}>
                               ({expiryInfo.daysLeft}d left)
                             </span>
                           )}
                         </div>
                       </TableCell>
                       {showExtendColumn && subscriber.status === "active" && (
-                        <TableCell>
+                        <TableCell className="px-3 py-2">
                           <div className="flex items-center gap-1">
                             <Input
                               type="number"
                               value={quickExtendDays[subscriber.id] || "30"}
                               onChange={(e) => setQuickExtendDays(prev => ({ ...prev, [subscriber.id]: e.target.value }))}
-                              className="w-16 h-8 text-xs"
+                              className="w-12 h-6 text-[10px]"
                               placeholder="Days"
                             />
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 gap-1"
+                              className="h-6 text-[10px] gap-1"
                               onClick={() => handleQuickExtend(subscriber)}
                             >
-                              <CalendarPlus className="h-3 w-3" />
+                              <CalendarPlus className="h-2.5 w-2.5" />
                               Extend
                             </Button>
                           </div>
                         </TableCell>
                       )}
                       {showExtendColumn && subscriber.status !== "active" && (
-                        <TableCell>
-                          <span className="text-xs text-muted-foreground">N/A</span>
+                        <TableCell className="px-3 py-2">
+                          <span className="text-[10px] text-muted-foreground">N/A</span>
                         </TableCell>
                       )}
-                      <TableCell className="text-right">
+                      <TableCell className="px-3 py-2 text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon-sm">
-                              <MoreHorizontal className="h-4 w-4" />
+                            <Button variant="ghost" size="icon-sm" className="h-5 w-5">
+                              <MoreHorizontal className="h-3 w-3" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
-                              <Eye className="h-4 w-4 mr-2" />
+                            <DropdownMenuItem onClick={() => handleViewDetails(subscriber)} className="text-xs">
+                              <Eye className="h-3 w-3 mr-1.5" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCheckMembership(subscriber)}>
-                              <RefreshCw className="h-4 w-4 mr-2" />
+                            <DropdownMenuItem onClick={() => handleCheckMembership(subscriber)} className="text-xs">
+                              <RefreshCw className="h-3 w-3 mr-1.5" />
                               Check Channel Status
                             </DropdownMenuItem>
                             {(subscriber.status === "pending_approval" || subscriber.status === "awaiting_proof") && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                  className="text-success"
+                                  className="text-success text-xs"
                                   onClick={() => handleQuickApprove(subscriber)}
                                 >
-                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  <CheckCircle className="h-3 w-3 mr-1.5" />
                                   Approve
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className="text-destructive"
+                                  className="text-destructive text-xs"
                                   onClick={() => handleQuickReject(subscriber)}
                                 >
-                                  <XCircle className="h-4 w-4 mr-2" />
+                                  <XCircle className="h-3 w-3 mr-1.5" />
                                   Reject
                                 </DropdownMenuItem>
                               </>
@@ -895,8 +895,8 @@ export default function Subscribers() {
                             {subscriber.status === "active" && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
-                                  <Clock className="h-4 w-4 mr-2" />
+                                <DropdownMenuItem onClick={() => handleViewDetails(subscriber)} className="text-xs">
+                                  <Clock className="h-3 w-3 mr-1.5" />
                                   Extend Subscription
                                 </DropdownMenuItem>
                               </>
@@ -912,16 +912,16 @@ export default function Subscribers() {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Rows per page:</span>
+          <div className="flex items-center justify-between px-3 py-2.5 border-t border-border">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>Rows:</span>
               <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
-                <SelectTrigger className="w-[70px] h-8">
+                <SelectTrigger className="w-[60px] h-6 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {PAGE_SIZES.map((size) => (
-                    <SelectItem key={size} value={size.toString()}>
+                    <SelectItem key={size} value={size.toString()} className="text-xs">
                       {size}
                     </SelectItem>
                   ))}
@@ -929,26 +929,28 @@ export default function Subscribers() {
               </Select>
             </div>
 
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
                 {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="h-6 w-6 p-0"
                   disabled={page === 1}
                   onClick={() => setPage(page - 1)}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-3 w-3" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="h-6 w-6 p-0"
                   disabled={page >= totalPages}
                   onClick={() => setPage(page + 1)}
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3 w-3" />
                 </Button>
               </div>
             </div>
@@ -959,68 +961,68 @@ export default function Subscribers() {
   );
 
   return (
-    <div className="space-y-8 max-w-7xl">
+    <div className="space-y-4 max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Subscribers</h1>
-          <p className="text-gray-500 text-sm">Manage all your channel subscribers in one place.</p>
+          <h1 className="text-base font-semibold text-gray-900">Subscribers</h1>
+          <p className="text-gray-500 text-xs">Manage all your channel subscribers in one place.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
-            <Download className="h-4 w-4" />
+        <div className="flex gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={handleExportCSV}>
+            <Download className="h-3 w-3" />
             Export {selectedIds.size > 0 && `(${selectedIds.size})`}
           </Button>
-          <Button className="gap-2" onClick={() => setAddDialogOpen(true)}>
-            <Plus className="h-4 w-4" />
+          <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="h-3 w-3" />
             Add Subscriber
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <Card className="cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setActiveTab("active"); setStatusFilter("all"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-success/20 flex items-center justify-center">
-              <UserCheck className="h-5 w-5 text-success" />
+          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-success/20 flex items-center justify-center">
+              <UserCheck className="h-3.5 w-3.5 text-success" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{stats.active}</p>
-              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-lg font-bold text-foreground">{stats.active}</p>
+              <p className="text-[10px] text-muted-foreground">Active</p>
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("pending_approval"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-warning/20 flex items-center justify-center">
-              <Clock className="h-5 w-5 text-warning" />
+          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-warning/20 flex items-center justify-center">
+              <Clock className="h-3.5 w-3.5 text-warning" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-warning">{stats.pending_approval}</p>
-              <p className="text-xs text-muted-foreground">Pending Approval</p>
+              <p className="text-lg font-bold text-warning">{stats.pending_approval}</p>
+              <p className="text-[10px] text-muted-foreground">Pending Approval</p>
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:border-secondary/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("awaiting_proof"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-secondary/20 flex items-center justify-center">
-              <AlertCircle className="h-5 w-5 text-secondary" />
+          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-secondary/20 flex items-center justify-center">
+              <AlertCircle className="h-3.5 w-3.5 text-secondary" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-secondary">{stats.awaiting_proof}</p>
-              <p className="text-xs text-muted-foreground">Awaiting Proof</p>
+              <p className="text-lg font-bold text-secondary">{stats.awaiting_proof}</p>
+              <p className="text-[10px] text-muted-foreground">Awaiting Proof</p>
             </div>
           </CardContent>
         </Card>
         <Card className="cursor-pointer hover:border-muted-foreground/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("expired"); }}>
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center">
-              <UserX className="h-5 w-5 text-muted-foreground" />
+          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-md bg-muted/50 flex items-center justify-center">
+              <UserX className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-muted-foreground">{stats.expired}</p>
-              <p className="text-xs text-muted-foreground">Expired</p>
+              <p className="text-lg font-bold text-muted-foreground">{stats.expired}</p>
+              <p className="text-[10px] text-muted-foreground">Expired</p>
             </div>
           </CardContent>
         </Card>
@@ -1028,15 +1030,15 @@ export default function Subscribers() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="all" className="gap-2">
-            <Users className="h-4 w-4" />
+        <TabsList className="grid w-full max-w-xs grid-cols-2">
+          <TabsTrigger value="all" className="gap-1.5 text-xs">
+            <Users className="h-3 w-3" />
             All Subscribers
           </TabsTrigger>
-          <TabsTrigger value="active" className="gap-2">
-            <CalendarPlus className="h-4 w-4" />
+          <TabsTrigger value="active" className="gap-1.5 text-xs">
+            <CalendarPlus className="h-3 w-3" />
             Active / Extend
-            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
               {stats.active}
             </Badge>
           </TabsTrigger>
@@ -1044,32 +1046,32 @@ export default function Subscribers() {
 
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
-          <Card className="bg-primary/10 border-primary/30 mt-4">
-            <CardContent className="py-3 flex items-center justify-between">
-              <span className="text-sm text-foreground">
+          <Card className="bg-primary/10 border-primary/30 mt-3">
+            <CardContent className="py-2 flex items-center justify-between">
+              <span className="text-xs text-foreground">
                 {selectedIds.size} subscriber(s) selected
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5">
                 {activeTab === "all" && (
                   <>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2 bg-success/20 border-success/30 text-success hover:bg-success/30"
+                      className="gap-1.5 h-6 text-[10px] bg-success/20 border-success/30 text-success hover:bg-success/30"
                       onClick={handleBulkApprove}
                       disabled={isProcessingBulk}
                     >
-                      {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                      {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
                       Approve
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2 bg-destructive/20 border-destructive/30 text-destructive hover:bg-destructive/30"
+                      className="gap-1.5 h-6 text-[10px] bg-destructive/20 border-destructive/30 text-destructive hover:bg-destructive/30"
                       onClick={handleBulkReject}
                       disabled={isProcessingBulk}
                     >
-                      {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                      {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
                       Reject
                     </Button>
                   </>
@@ -1078,17 +1080,18 @@ export default function Subscribers() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
+                    className="gap-1.5 h-6 text-[10px] bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
                     onClick={handleBulkExtend}
                     disabled={isProcessingBulk}
                   >
-                    {isProcessingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+                    {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarPlus className="h-3 w-3" />}
                     Extend 30 Days
                   </Button>
                 )}
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="h-6 text-[10px]"
                   onClick={() => setSelectedIds(new Set())}
                 >
                   Clear
@@ -1099,43 +1102,43 @@ export default function Subscribers() {
         )}
 
         {/* Filters */}
-        <Card className="mt-4">
-          <CardContent className="pt-4">
-            <div className="flex flex-col md:flex-row gap-4">
+        <Card className="mt-3">
+          <CardContent className="pt-3 pb-3">
+            <div className="flex flex-col md:flex-row gap-2.5">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                 <Input
                   placeholder="Search by username, name, or Telegram ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  className="pl-8 h-7 text-xs"
                 />
               </div>
               {activeTab === "all" && (
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full md:w-[180px]">
-                    <Filter className="h-4 w-4 mr-2" />
+                  <SelectTrigger className="w-full md:w-[150px] h-7 text-xs">
+                    <Filter className="h-3 w-3 mr-1.5" />
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending_approval">Pending Approval</SelectItem>
-                    <SelectItem value="pending_payment">Pending Payment</SelectItem>
-                    <SelectItem value="awaiting_proof">Awaiting Proof</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
+                    <SelectItem value="active" className="text-xs">Active</SelectItem>
+                    <SelectItem value="pending_approval" className="text-xs">Pending Approval</SelectItem>
+                    <SelectItem value="pending_payment" className="text-xs">Pending Payment</SelectItem>
+                    <SelectItem value="awaiting_proof" className="text-xs">Awaiting Proof</SelectItem>
+                    <SelectItem value="expired" className="text-xs">Expired</SelectItem>
+                    <SelectItem value="rejected" className="text-xs">Rejected</SelectItem>
                   </SelectContent>
                 </Select>
               )}
               <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-full md:w-[200px]">
+                <SelectTrigger className="w-full md:w-[160px] h-7 text-xs">
                   <SelectValue placeholder="Project" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Projects</SelectItem>
+                  <SelectItem value="all" className="text-xs">All Projects</SelectItem>
                   {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
+                    <SelectItem key={project.id} value={project.id} className="text-xs">
                       {project.project_name}
                     </SelectItem>
                   ))}
@@ -1145,11 +1148,11 @@ export default function Subscribers() {
           </CardContent>
         </Card>
 
-        <TabsContent value="all" className="mt-4">
+        <TabsContent value="all" className="mt-3">
           {renderSubscribersTable(false)}
         </TabsContent>
 
-        <TabsContent value="active" className="mt-4">
+        <TabsContent value="active" className="mt-3">
           {renderSubscribersTable(true)}
         </TabsContent>
       </Tabs>

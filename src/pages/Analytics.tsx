@@ -380,14 +380,14 @@ export default function Analytics() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Subscriber Growth Chart - Spans 2 columns */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Subscriber Growth & Revenue</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-sm">Subscriber Growth & Revenue</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
+          <CardContent className="px-3 pb-3">
+            <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dailyStats}>
                   <defs>
@@ -404,20 +404,20 @@ export default function Analytics() {
                   <XAxis 
                     dataKey="date" 
                     stroke="hsl(215, 20%, 65%)" 
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                   />
                   <YAxis 
                     yAxisId="left"
                     stroke="hsl(215, 20%, 65%)" 
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                   />
                   <YAxis 
                     yAxisId="right"
                     orientation="right"
                     stroke="hsl(215, 20%, 65%)" 
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                     tickFormatter={(value) => `$${value}`}
                   />
@@ -425,14 +425,15 @@ export default function Analytics() {
                     contentStyle={{
                       backgroundColor: "hsl(220, 45%, 13%)",
                       border: "1px solid hsl(220, 30%, 20%)",
-                      borderRadius: "8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
                     }}
                     formatter={(value: number, name: string) => [
                       name === "revenue" ? `$${value}` : value,
                       name === "newSubscribers" ? "New Subscribers" : "Revenue"
                     ]}
                   />
-                  <Legend />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
                   <Area
                     yAxisId="left"
                     type="monotone"
@@ -461,11 +462,11 @@ export default function Analytics() {
 
         {/* Subscriber Status Pie Chart */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Subscriber Status</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-sm">Subscriber Status</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[220px] flex items-center justify-center">
+          <CardContent className="px-3 pb-3">
+            <div className="h-[160px] flex items-center justify-center">
               {subscriberStats.total > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -473,8 +474,8 @@ export default function Analytics() {
                       data={subscriberStatusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
+                      innerRadius={35}
+                      outerRadius={60}
                       paddingAngle={5}
                       dataKey="value"
                     >
@@ -486,23 +487,24 @@ export default function Analytics() {
                       contentStyle={{
                         backgroundColor: "hsl(220, 45%, 13%)",
                         border: "1px solid hsl(220, 30%, 20%)",
-                        borderRadius: "8px",
+                        borderRadius: "6px",
+                        fontSize: "11px",
                       }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="text-center text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No subscriber data yet</p>
+                  <Users className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                  <p className="text-xs">No subscriber data yet</p>
                 </div>
               )}
             </div>
-            <div className="flex justify-center gap-6 mt-2">
+            <div className="flex justify-center gap-4 mt-1.5">
               {subscriberStatusData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm text-muted-foreground">
+                <div key={item.name} className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-[10px] text-muted-foreground">
                     {item.name} ({item.value})
                   </span>
                 </div>
@@ -514,19 +516,19 @@ export default function Analytics() {
 
       {/* Cumulative Revenue Chart */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-primary" />
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <Wallet className="h-3.5 w-3.5 text-primary" />
               Cumulative Revenue Over Time
             </CardTitle>
-            <Badge variant="outline" className="text-primary border-primary/30">
+            <Badge variant="outline" className="text-primary border-primary/30 text-[10px] px-1.5">
               Lifetime: ${lifetimeRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
+        <CardContent className="px-3 pb-3">
+          <div className="h-[180px]">
             {dailyStats.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dailyStats}>
@@ -540,12 +542,12 @@ export default function Analytics() {
                   <XAxis 
                     dataKey="date" 
                     stroke="hsl(215, 20%, 65%)" 
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                   />
                   <YAxis 
                     stroke="hsl(215, 20%, 65%)" 
-                    fontSize={12}
+                    fontSize={10}
                     tickLine={false}
                     tickFormatter={(value) => `$${value.toLocaleString()}`}
                   />
@@ -553,7 +555,8 @@ export default function Analytics() {
                     contentStyle={{
                       backgroundColor: "hsl(220, 45%, 13%)",
                       border: "1px solid hsl(220, 30%, 20%)",
-                      borderRadius: "8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
                     }}
                     formatter={(value: number) => [`$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "Cumulative Revenue"]}
                   />
@@ -562,7 +565,7 @@ export default function Analytics() {
                     dataKey="cumulativeRevenue"
                     name="Cumulative Revenue"
                     stroke="hsl(270, 91%, 65%)"
-                    strokeWidth={3}
+                    strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorCumulative)"
                   />
@@ -571,8 +574,8 @@ export default function Analytics() {
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center">
-                  <Wallet className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No revenue data yet</p>
+                  <Wallet className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                  <p className="text-xs">No revenue data yet</p>
                 </div>
               </div>
             )}
@@ -581,14 +584,14 @@ export default function Analytics() {
       </Card>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Revenue by Plan */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Revenue by Plan</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-sm">Revenue by Plan</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[250px]">
+          <CardContent className="px-3 pb-3">
+            <div className="h-[160px]">
               {planRevenue.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={planRevenue} layout="vertical">
@@ -596,21 +599,22 @@ export default function Analytics() {
                     <XAxis 
                       type="number" 
                       stroke="hsl(215, 20%, 65%)" 
-                      fontSize={12}
+                      fontSize={10}
                       tickFormatter={(value) => `$${value}`}
                     />
                     <YAxis 
                       dataKey="name" 
                       type="category" 
                       stroke="hsl(215, 20%, 65%)" 
-                      fontSize={12} 
-                      width={100}
+                      fontSize={10} 
+                      width={80}
                     />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(220, 45%, 13%)",
                         border: "1px solid hsl(220, 30%, 20%)",
-                        borderRadius: "8px",
+                        borderRadius: "6px",
+                        fontSize: "11px",
                       }}
                       formatter={(value: number) => [`$${value.toFixed(2)}`, "Revenue"]}
                     />
@@ -626,8 +630,8 @@ export default function Analytics() {
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No plan data yet</p>
+                    <BarChart3 className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                    <p className="text-xs">No plan data yet</p>
                   </div>
                 </div>
               )}
@@ -637,11 +641,11 @@ export default function Analytics() {
 
         {/* Subscribers by Project */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Subscribers by Project</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-sm">Subscribers by Project</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[250px]">
+          <CardContent className="px-3 pb-3">
+            <div className="h-[160px]">
               {projectStats.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={projectStats}>
@@ -649,18 +653,19 @@ export default function Analytics() {
                     <XAxis 
                       dataKey="name" 
                       stroke="hsl(215, 20%, 65%)" 
-                      fontSize={12}
+                      fontSize={10}
                       tick={{ fill: "hsl(215, 20%, 65%)" }}
                     />
                     <YAxis 
                       stroke="hsl(215, 20%, 65%)" 
-                      fontSize={12}
+                      fontSize={10}
                     />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "hsl(220, 45%, 13%)",
                         border: "1px solid hsl(220, 30%, 20%)",
-                        borderRadius: "8px",
+                        borderRadius: "6px",
+                        fontSize: "11px",
                       }}
                     />
                     <Bar 
@@ -674,8 +679,8 @@ export default function Analytics() {
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
-                    <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No project data yet</p>
+                    <Users className="h-8 w-8 mx-auto mb-1.5 opacity-50" />
+                    <p className="text-xs">No project data yet</p>
                   </div>
                 </div>
               )}
@@ -687,29 +692,29 @@ export default function Analytics() {
       {/* Quick Stats Table */}
       {projectStats.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Project Performance</CardTitle>
+          <CardHeader className="pb-2 pt-3 px-3">
+            <CardTitle className="text-sm">Project Performance</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 pb-3">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border/30">
-                    <th className="text-left py-3 px-4 text-muted-foreground font-medium">Project</th>
-                    <th className="text-right py-3 px-4 text-muted-foreground font-medium">Subscribers</th>
-                    <th className="text-right py-3 px-4 text-muted-foreground font-medium">Revenue</th>
-                    <th className="text-right py-3 px-4 text-muted-foreground font-medium">Avg/Subscriber</th>
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium text-xs">Project</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium text-xs">Subscribers</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium text-xs">Revenue</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium text-xs">Avg/Sub</th>
                   </tr>
                 </thead>
                 <tbody>
                   {projectStats.map((project, index) => (
                     <tr key={project.name} className={index !== projectStats.length - 1 ? "border-b border-border/20" : ""}>
-                      <td className="py-3 px-4 text-foreground font-medium">{project.name}</td>
-                      <td className="py-3 px-4 text-right text-foreground">{project.subscribers}</td>
-                      <td className="py-3 px-4 text-right text-success font-medium">
+                      <td className="py-2 px-3 text-foreground font-medium text-xs">{project.name}</td>
+                      <td className="py-2 px-3 text-right text-foreground text-xs">{project.subscribers}</td>
+                      <td className="py-2 px-3 text-right text-success font-medium text-xs">
                         ${project.revenue.toFixed(2)}
                       </td>
-                      <td className="py-3 px-4 text-right text-muted-foreground">
+                      <td className="py-2 px-3 text-right text-muted-foreground text-xs">
                         ${project.subscribers > 0 ? (project.revenue / project.subscribers).toFixed(2) : "0.00"}
                       </td>
                     </tr>
