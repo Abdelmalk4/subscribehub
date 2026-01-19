@@ -32,7 +32,7 @@ export default function CTABanner() {
             </p>
 
             <Link to="/signup">
-              <Button variant="gradient" size="xl" className="gap-2 btn-glow animate-glow-pulse">
+              <Button size="xl" className="gap-2">
                 <Rocket className="h-5 w-5" />
                 Start Your Free Trial
                 <ArrowRight className="h-5 w-5" />

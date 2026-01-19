@@ -63,7 +63,7 @@ export default function FeaturesSection() {
     <section id="features" ref={sectionRef} className="py-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <Badge variant="glass" className="mb-4">
+          <Badge variant="secondary" className="mb-4">
             <Zap className="h-3.5 w-3.5 mr-1.5" />
             Features
           </Badge>
@@ -79,13 +79,13 @@ export default function FeaturesSection() {
           {features.map((feature, index) => (
             <Card
               key={feature.title}
-              className={`feature-card fade-in-up group bg-card/30 backdrop-blur-xl border-border/40 hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] ${
+              className={`feature-card fade-in-up group hover:border-primary/30 transition-all duration-300 hover:shadow-md ${
                 feature.span === 2 ? "md:col-span-2" : ""
               }`}
               style={{ transitionDelay: `${index * 100}ms` }}
             >
               <CardContent className="pt-6 pb-6">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-4 group-hover:shadow-glow-sm transition-all duration-300">
+                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-all duration-300">
                   <feature.icon className="h-6 w-6 text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold text-foreground mb-2">{feature.title}</h3>

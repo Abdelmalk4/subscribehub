@@ -178,7 +178,7 @@ export default function AdminClients() {
       </div>
 
       {/* Filters */}
-      <Card variant="glass">
+      <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -208,7 +208,7 @@ export default function AdminClients() {
       </Card>
 
       {/* Clients Table */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">
             Clients ({filteredClients.length})
@@ -342,7 +342,7 @@ export default function AdminClients() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <Card variant="glass">
+                    <Card>
                       <CardContent className="p-4 text-center">
                         <p className="text-2xl font-bold text-foreground">
                           {selectedClient.projectCount}
@@ -350,7 +350,7 @@ export default function AdminClients() {
                         <p className="text-sm text-muted-foreground">Projects</p>
                       </CardContent>
                     </Card>
-                    <Card variant="glass">
+                    <Card>
                       <CardContent className="p-4 text-center">
                         <p className="text-2xl font-bold text-foreground">
                           {selectedClient.subscriberCount}
@@ -383,7 +383,7 @@ export default function AdminClients() {
                   <h4 className="text-sm font-semibold text-foreground mb-3">Projects</h4>
                   <div className="space-y-2">
                     {clientProjects.map((project) => (
-                      <Card key={project.id} variant="glass">
+                      <Card key={project.id}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div>

@@ -535,7 +535,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
 
                           <Button
                             type="button"
-                            variant="gradient"
                             className="w-full gap-2"
                             onClick={handleConnectStripe}
                             disabled={isConnectingStripe}
@@ -627,7 +626,6 @@ export function EditProjectDialog({ open, onOpenChange, project, onSuccess }: Ed
               </Button>
               <Button
                 type="submit"
-                variant="gradient"
                 className="flex-1"
                 disabled={isSubmitting}
               >

@@ -227,7 +227,7 @@ export default function AdminSettings() {
       <PaymentMethodsManager />
 
       {/* Platform Configuration */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
@@ -311,7 +311,7 @@ export default function AdminSettings() {
       </Card>
 
       {/* Subscription Plans */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

@@ -64,7 +64,7 @@ export default function LandingNavbar({ onNavigate }: LandingNavbarProps) {
               </Button>
             </Link>
             <Link to="/signup">
-              <Button variant="gradient" className="gap-2 btn-glow">
+              <Button className="gap-2">
                 Start Free
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -104,7 +104,7 @@ export default function LandingNavbar({ onNavigate }: LandingNavbarProps) {
                 </Button>
               </Link>
               <Link to="/signup">
-                <Button variant="gradient" className="w-full gap-2">
+                <Button className="w-full gap-2">
                   Start Free
                   <ArrowRight className="h-4 w-4" />
                 </Button>

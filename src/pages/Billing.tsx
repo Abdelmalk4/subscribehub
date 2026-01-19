@@ -296,7 +296,7 @@ export default function Billing() {
                 Upgrade now to keep uninterrupted access to your channels.
               </p>
             </div>
-            <Button variant="warning" size="sm">
+            <Button size="sm">
               Upgrade Now
             </Button>
           </CardContent>
@@ -327,7 +327,7 @@ export default function Billing() {
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           {/* Current Plan */}
-          <Card variant="glow">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -355,7 +355,6 @@ export default function Billing() {
                 <div className="flex gap-2">
                   {isExpired ? (
                     <Button
-                      variant="gradient"
                       onClick={handleReactivateSubscription}
                       disabled={actionLoading}
                     >
@@ -368,7 +367,7 @@ export default function Billing() {
                     </Button>
                   ) : (
                     <>
-                      <Button variant="glass">
+                      <Button variant="secondary">
                         <CreditCard className="h-4 w-4 mr-2" />
                         Update Payment
                       </Button>
@@ -450,8 +449,7 @@ export default function Billing() {
                 return (
                   <Card
                     key={plan.id}
-                    variant={isPopular ? "glow" : "glass"}
-                    className={isPopular ? "relative" : ""}
+                    className={isPopular ? "relative ring-2 ring-primary" : ""}
                   >
                     {isPopular && (
                       <Badge
@@ -495,8 +493,8 @@ export default function Billing() {
                         ))}
                       </ul>
                       {isUnlimited ? (
-                        <Button
-                          variant="glass"
+                      <Button
+                          variant="secondary"
                           className="w-full"
                           onClick={() => setContactSalesOpen(true)}
                         >
@@ -505,7 +503,7 @@ export default function Billing() {
                         </Button>
                       ) : (
                         <Button
-                          variant={isCurrentPlan ? "outline" : isPopular ? "gradient" : "glass"}
+                          variant={isCurrentPlan ? "outline" : isPopular ? "default" : "secondary"}
                           className="w-full"
                           disabled={isCurrentPlan || actionLoading}
                           onClick={() => !isCurrentPlan && openUpgradeDialog(plan)}
@@ -539,7 +537,7 @@ export default function Billing() {
 
         {/* History Tab */}
         <TabsContent value="history">
-          <Card variant="glass">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <History className="h-5 w-5" />

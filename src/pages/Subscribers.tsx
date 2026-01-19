@@ -864,7 +864,7 @@ export default function Subscribers() {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="glass-menu">
+                          <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleViewDetails(subscriber)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
@@ -969,11 +969,11 @@ export default function Subscribers() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="glass" className="gap-2" onClick={handleExportCSV}>
+          <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
             Export {selectedIds.size > 0 && `(${selectedIds.size})`}
           </Button>
-          <Button variant="gradient" className="gap-2" onClick={() => setAddDialogOpen(true)}>
+          <Button className="gap-2" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             Add Subscriber
           </Button>
@@ -982,7 +982,7 @@ export default function Subscribers() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card variant="glass" className="cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setActiveTab("active"); setStatusFilter("all"); }}>
+        <Card className="cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setActiveTab("active"); setStatusFilter("all"); }}>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-success/20 flex items-center justify-center">
               <UserCheck className="h-5 w-5 text-success" />
@@ -993,7 +993,7 @@ export default function Subscribers() {
             </div>
           </CardContent>
         </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("pending_approval"); }}>
+        <Card className="cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("pending_approval"); }}>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-warning/20 flex items-center justify-center">
               <Clock className="h-5 w-5 text-warning" />
@@ -1004,7 +1004,7 @@ export default function Subscribers() {
             </div>
           </CardContent>
         </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-secondary/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("awaiting_proof"); }}>
+        <Card className="cursor-pointer hover:border-secondary/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("awaiting_proof"); }}>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-secondary/20 flex items-center justify-center">
               <AlertCircle className="h-5 w-5 text-secondary" />
@@ -1015,7 +1015,7 @@ export default function Subscribers() {
             </div>
           </CardContent>
         </Card>
-        <Card variant="glass" className="cursor-pointer hover:border-muted-foreground/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("expired"); }}>
+        <Card className="cursor-pointer hover:border-muted-foreground/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("expired"); }}>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-muted/50 flex items-center justify-center">
               <UserX className="h-5 w-5 text-muted-foreground" />
@@ -1101,7 +1101,7 @@ export default function Subscribers() {
         )}
 
         {/* Filters */}
-        <Card variant="glass" className="mt-4">
+        <Card className="mt-4">
           <CardContent className="pt-4">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
@@ -1115,11 +1115,11 @@ export default function Subscribers() {
               </div>
               {activeTab === "all" && (
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full md:w-[180px] bg-card/30 border-border/50">
+                  <SelectTrigger className="w-full md:w-[180px]">
                     <Filter className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
-                  <SelectContent className="glass-menu">
+                  <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="pending_approval">Pending Approval</SelectItem>
@@ -1131,10 +1131,10 @@ export default function Subscribers() {
                 </Select>
               )}
               <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-full md:w-[200px] bg-card/30 border-border/50">
+                <SelectTrigger className="w-full md:w-[200px]">
                   <SelectValue placeholder="Project" />
                 </SelectTrigger>
-                <SelectContent className="glass-menu">
+                <SelectContent>
                   <SelectItem value="all">All Projects</SelectItem>
                   {projects.map((project) => (
                     <SelectItem key={project.id} value={project.id}>

@@ -235,7 +235,7 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
         <div className="mt-6 space-y-4">
           {!showForm ? (
             <>
-              <Button onClick={handleNewPlan} variant="gradient" className="w-full gap-2">
+              <Button onClick={handleNewPlan} className="w-full gap-2">
                 <Plus className="h-4 w-4" />
                 Add New Plan
               </Button>
@@ -253,7 +253,7 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
               ) : (
                 <div className="space-y-3">
                   {plans.map((plan) => (
-                    <Card key={plan.id} variant="glass">
+                    <Card key={plan.id}>
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -465,7 +465,6 @@ export function PlansDialog({ open, onOpenChange, projectId, projectName }: Plan
 
                 <Button
                   type="submit"
-                  variant="gradient"
                   className="w-full"
                   disabled={isSaving}
                 >
