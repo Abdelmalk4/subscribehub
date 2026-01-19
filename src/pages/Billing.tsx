@@ -550,6 +550,7 @@ export default function Billing() {
         selectedPlan={selectedPlan}
         subscriptionId={subscription?.id || null}
         onSuccess={fetchBillingData}
+        billingCycle={billingCycle}
       />
 
       {/* Upload Payment Proof Dialog */}

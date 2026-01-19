@@ -82,6 +82,8 @@ export function InvoiceProofUpload({
       return;
     }
     setIsSubmitting(true);
+    // Call the completion callback to trigger parent handling
+    onUploadComplete(uploadedUrl);
   };
 
 
