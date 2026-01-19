@@ -49,30 +49,30 @@ export function PaymentMethodCard({
       className="cursor-pointer transition-all hover:shadow-md hover:border-gray-300 active:scale-[0.99]"
       onClick={handleCopy}
     >
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-gray-100">
-              <Icon className="h-5 w-5 text-gray-600" />
+      <CardContent className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-gray-100">
+              <Icon className="h-4 w-4 text-gray-600" />
             </div>
             <div>
-              <h3 className="font-medium text-gray-900">{methodName}</h3>
-              <p className="text-xs text-gray-500 capitalize">
+              <h3 className="text-xs font-medium text-gray-900">{methodName}</h3>
+              <p className="text-[10px] text-gray-500 capitalize">
                 {methodType.replace(/_/g, " ")}
               </p>
             </div>
           </div>
           <button
             className={cn(
-              "p-2 rounded-lg transition-colors",
+              "p-1.5 rounded-md transition-colors",
               copied ? "bg-success-50 text-success-500" : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             )}
           >
-            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         </div>
 
-        <div className="mt-4 space-y-1.5 text-sm">
+        <div className="mt-2.5 space-y-1 text-xs">
           {Object.entries(details).map(([key, value]) =>
             value ? (
               <div key={key} className="flex justify-between">
@@ -84,12 +84,12 @@ export function PaymentMethodCard({
         </div>
 
         {instructions && (
-          <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+          <p className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
             {instructions}
           </p>
         )}
 
-        <p className="mt-3 text-xs text-gray-400 text-center">
+        <p className="mt-2 text-[10px] text-gray-400 text-center">
           Click to copy details
         </p>
       </CardContent>

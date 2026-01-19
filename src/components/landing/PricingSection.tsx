@@ -85,34 +85,34 @@ export default function PricingSection() {
   }, []);
 
   return (
-    <section id="pricing" ref={sectionRef} className="py-24 px-4 sm:px-6 lg:px-8">
+    <section id="pricing" ref={sectionRef} className="py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-3">
             Simple, Transparent <span className="gradient-text">Pricing</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+          <p className="text-sm text-muted-foreground max-w-2xl mx-auto mb-6">
             Choose the perfect plan for your needs. All plans include a 14-day free trial.
           </p>
 
           {/* Billing Toggle */}
-          <div className="flex items-center justify-center gap-4">
-            <span className={`text-sm ${!isYearly ? "text-foreground" : "text-muted-foreground"}`}>
+          <div className="flex items-center justify-center gap-3">
+            <span className={`text-xs ${!isYearly ? "text-foreground" : "text-muted-foreground"}`}>
               Monthly
             </span>
             <Switch checked={isYearly} onCheckedChange={setIsYearly} />
-            <span className={`text-sm ${isYearly ? "text-foreground" : "text-muted-foreground"}`}>
+            <span className={`text-xs ${isYearly ? "text-foreground" : "text-muted-foreground"}`}>
               Yearly
             </span>
             {isYearly && (
-              <Badge variant="glass-primary" className="ml-2">
+              <Badge variant="glass-primary" className="ml-1 text-[10px]">
                 Save 20%
               </Badge>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {plans.map((plan, index) => (
             <Card
               key={plan.name}
@@ -124,43 +124,43 @@ export default function PricingSection() {
               style={{ transitionDelay: `${index * 100}ms` }}
             >
               {plan.popular && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary" />
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-primary to-secondary" />
               )}
 
-              <CardHeader className="pb-4">
+              <CardHeader className="pb-3">
                 {plan.popular && (
-                  <Badge className="w-fit mb-2 bg-primary/20 text-primary border-primary/30">
-                    <Star className="h-3 w-3 mr-1 fill-primary" />
+                  <Badge className="w-fit mb-1.5 bg-primary/20 text-primary border-primary/30 text-[10px]">
+                    <Star className="h-2.5 w-2.5 mr-0.5 fill-primary" />
                     Most Popular
                   </Badge>
                 )}
-                <h3 className="text-xl font-bold text-foreground">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground">{plan.description}</p>
+                <h3 className="text-base font-bold text-foreground">{plan.name}</h3>
+                <p className="text-xs text-muted-foreground">{plan.description}</p>
               </CardHeader>
 
               <CardContent>
-                <div className="mb-6">
+                <div className="mb-4">
                   {plan.monthlyPrice !== null ? (
                     <>
-                      <span className="text-4xl font-bold text-foreground">
+                      <span className="text-2xl font-bold text-foreground">
                         ${isYearly ? Math.round(plan.yearlyPrice! / 12) : plan.monthlyPrice}
                       </span>
-                      <span className="text-muted-foreground">/month</span>
+                      <span className="text-xs text-muted-foreground">/month</span>
                       {isYearly && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
                           ${plan.yearlyPrice}/year billed annually
                         </p>
                       )}
                     </>
                   ) : (
-                    <span className="text-3xl font-bold text-foreground">Contact Us</span>
+                    <span className="text-xl font-bold text-foreground">Contact Us</span>
                   )}
                 </div>
 
-                <ul className="space-y-3 mb-6">
+                <ul className="space-y-2 mb-4">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Check className="h-4 w-4 text-success shrink-0" />
+                    <li key={feature} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Check className="h-3 w-3 text-success shrink-0" />
                       {feature}
                     </li>
                   ))}
@@ -169,10 +169,11 @@ export default function PricingSection() {
                 <Link to={plan.monthlyPrice !== null ? "/signup" : "/contact"}>
                   <Button
                     variant={plan.popular ? "gradient" : "glass"}
-                    className={`w-full gap-2 ${plan.popular ? "btn-glow" : ""}`}
+                    size="sm"
+                    className={`w-full gap-1.5 ${plan.popular ? "btn-glow" : ""}`}
                   >
                     {plan.monthlyPrice !== null ? "Start Free Trial" : "Talk to Sales"}
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
               </CardContent>

@@ -27,31 +27,31 @@ const socialLinks = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border/30 py-16 px-4 sm:px-6 lg:px-8">
+    <footer className="border-t border-border/30 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-10">
           {/* Logo & Description */}
           <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-4">
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Rocket className="h-5 w-5 text-primary-foreground" />
+            <Link to="/" className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+                <Rocket className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-xl font-bold text-foreground">SubscribeHub</span>
+              <span className="text-base font-bold text-foreground">SubscribeHub</span>
             </Link>
-            <p className="text-muted-foreground text-sm max-w-xs mb-6">
+            <p className="text-muted-foreground text-xs max-w-xs mb-4">
               The all-in-one platform to monetize your Telegram channels effortlessly.
             </p>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {socialLinks.map((social) => (
                 <a
                   key={social.label}
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-10 w-10 rounded-lg bg-card/50 border border-border/30 flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+                  className="h-8 w-8 rounded-md bg-card/50 border border-border/30 flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
                   aria-label={social.label}
                 >
-                  <social.icon className="h-5 w-5" />
+                  <social.icon className="h-4 w-4" />
                 </a>
               ))}
             </div>
@@ -60,21 +60,21 @@ export default function Footer() {
           {/* Links */}
           {Object.entries(footerLinks).map(([category, links]) => (
             <div key={category}>
-              <h4 className="font-semibold text-foreground mb-4">{category}</h4>
-              <ul className="space-y-3">
+              <h4 className="text-sm font-semibold text-foreground mb-3">{category}</h4>
+              <ul className="space-y-2">
                 {links.map((link) => (
                   <li key={link.label}>
                     {link.href.startsWith("#") ? (
                       <a
                         href={link.href}
-                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {link.label}
                       </a>
                     ) : (
                       <Link
                         to={link.href}
-                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {link.label}
                       </Link>
@@ -87,11 +87,11 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">
+        <div className="pt-6 border-t border-border/30 flex flex-col md:flex-row items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
             © 2024 SubscribeHub. All rights reserved.
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Made with 💜 for Telegram creators
           </p>
         </div>

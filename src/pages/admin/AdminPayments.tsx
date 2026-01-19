@@ -255,26 +255,26 @@ export default function AdminPayments() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-4 max-w-6xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Payment Approvals</h1>
-        <p className="text-gray-500 text-sm">Review and approve client subscription payments.</p>
+        <h1 className="text-lg font-semibold text-gray-900">Payment Approvals</h1>
+        <p className="text-gray-500 text-xs">Review and approve client subscription payments.</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <Card
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("pending")}
         >
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold text-amber-500">{stats.pending}</p>
+                <p className="text-xs text-muted-foreground">Pending</p>
+                <p className="text-lg font-bold text-amber-500">{stats.pending}</p>
               </div>
-              <Clock className="h-8 w-8 text-amber-500/30" />
+              <Clock className="h-5 w-5 text-amber-500/30" />
             </div>
           </CardContent>
         </Card>
@@ -282,13 +282,13 @@ export default function AdminPayments() {
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("approved")}
         >
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Approved</p>
-                <p className="text-2xl font-bold text-green-500">{stats.approved}</p>
+                <p className="text-xs text-muted-foreground">Approved</p>
+                <p className="text-lg font-bold text-green-500">{stats.approved}</p>
               </div>
-              <CheckCircle className="h-8 w-8 text-green-500/30" />
+              <CheckCircle className="h-5 w-5 text-green-500/30" />
             </div>
           </CardContent>
         </Card>
@@ -296,26 +296,26 @@ export default function AdminPayments() {
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("rejected")}
         >
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Rejected</p>
-                <p className="text-2xl font-bold text-red-500">{stats.rejected}</p>
+                <p className="text-xs text-muted-foreground">Rejected</p>
+                <p className="text-lg font-bold text-red-500">{stats.rejected}</p>
               </div>
-              <AlertCircle className="h-8 w-8 text-red-500/30" />
+              <AlertCircle className="h-5 w-5 text-red-500/30" />
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold text-emerald-500">
+                <p className="text-xs text-muted-foreground">Total Revenue</p>
+                <p className="text-lg font-bold text-emerald-500">
                   ${stats.totalAmount.toLocaleString()}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-emerald-500/30" />
+              <DollarSign className="h-5 w-5 text-emerald-500/30" />
             </div>
           </CardContent>
         </Card>
