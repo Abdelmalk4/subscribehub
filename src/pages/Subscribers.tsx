@@ -959,17 +959,15 @@ export default function Subscribers() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-7xl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Subscribers</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage all your channel subscribers in one place.
-          </p>
+          <h1 className="text-xl font-semibold text-gray-900">Subscribers</h1>
+          <p className="text-gray-500 text-sm">Manage all your channel subscribers in one place.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
+          <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
             Export {selectedIds.size > 0 && `(${selectedIds.size})`}
           </Button>

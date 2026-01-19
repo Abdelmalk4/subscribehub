@@ -200,18 +200,16 @@ export default function AdminOverview() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-6xl">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <Badge variant="outline" className="text-primary border-primary">
-            Super Admin
-          </Badge>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Platform Overview</h1>
+          <p className="text-gray-500 text-sm">Monitor platform-wide statistics and performance.</p>
         </div>
-        <h1 className="text-3xl font-bold text-foreground">Platform Overview</h1>
-        <p className="text-muted-foreground mt-1">
-          Monitor platform-wide statistics and performance
-        </p>
+        <Badge variant="outline" className="text-primary border-primary">
+          Super Admin
+        </Badge>
       </div>
 
       {/* KPI Cards */}

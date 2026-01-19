@@ -255,13 +255,11 @@ export default function AdminPayments() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Payment Approvals</h1>
-        <p className="text-muted-foreground mt-1">
-          Review and approve client subscription payments
-        </p>
+        <h1 className="text-xl font-semibold text-gray-900">Payment Approvals</h1>
+        <p className="text-gray-500 text-sm">Review and approve client subscription payments.</p>
       </div>
 
       {/* Stats Cards */}

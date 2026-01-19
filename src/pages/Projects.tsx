@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
   Settings,
-  BarChart3,
   Users,
   Bot,
   MoreVertical,
   ExternalLink,
   Package,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -75,27 +74,23 @@ export default function Projects() {
       // Fetch stats for each project
       const stats: ProjectStats = {};
       for (const project of data || []) {
-        // Get active subscribers count
         const { count: subsCount } = await supabase
           .from("subscribers")
           .select("*", { count: "exact", head: true })
           .eq("project_id", project.id)
           .eq("status", "active");
 
-        // Get all subscribers who have ever paid (active + expired) for lifetime revenue
         const { data: paidSubscribers } = await supabase
           .from("subscribers")
           .select("plan_id, plans(price)")
           .eq("project_id", project.id)
           .in("status", ["active", "expired"]);
 
-        // Calculate lifetime revenue from all paid subscribers
         const lifetimeRevenue = (paidSubscribers || []).reduce((total, sub) => {
           const planPrice = (sub.plans as { price: number } | null)?.price || 0;
           return total + Number(planPrice);
         }, 0);
 
-        // Calculate current month revenue (active subscribers only)
         const { data: activeSubscribers } = await supabase
           .from("subscribers")
           .select("plan_id, plans(price)")
@@ -107,7 +102,6 @@ export default function Projects() {
           return total + Number(planPrice);
         }, 0);
 
-        // Get plan count
         const { count: plansCount } = await supabase
           .from("plans")
           .select("*", { count: "exact", head: true })
@@ -147,17 +141,13 @@ export default function Projects() {
     if (status === "active") {
       return (
         <Badge variant="success">
-          <span className="h-1.5 w-1.5 rounded-full bg-success mr-1.5 animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5" />
           Active
         </Badge>
       );
     }
     if (status === "suspended") {
-      return (
-        <Badge variant="destructive">
-          Suspended
-        </Badge>
-      );
+      return <Badge variant="destructive">Suspended</Badge>;
     }
     return <Badge variant="secondary">{status || "Unknown"}</Badge>;
   };
@@ -165,20 +155,18 @@ export default function Projects() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Projects</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your Telegram channels and subscription bots.
-          </p>
+          <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
+          <p className="text-gray-500 text-sm">Manage your Telegram channels and subscription bots.</p>
         </div>
         <Button className="gap-2" onClick={() => setCreateDialogOpen(true)}>
           <Plus className="h-4 w-4" />
@@ -187,121 +175,114 @@ export default function Projects() {
       </div>
 
       {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map((project) => {
           const stats = projectStats[project.id] || { subscribers: 0, revenue: 0, lifetimeRevenue: 0, plans: 0 };
           
           return (
-            <Card key={project.id} className="group hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                      <Bot className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{project.project_name}</CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {project.admin_username ? `@${project.admin_username}` : "Bot connected"}
-                      </p>
-                    </div>
+            <div key={project.id} className="p-5 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-shadow">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                    <Bot className="h-5 w-5 text-purple-600" />
                   </div>
-                  {getStatusBadge(project.status)}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4 py-4 border-y border-border/30">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{stats.subscribers}</p>
-                    <p className="text-xs text-muted-foreground">Active Subs</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-foreground">{stats.plans}</p>
-                    <p className="text-xs text-muted-foreground">Plans</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 pb-2">
-                  <div className="text-center p-3 rounded-lg bg-muted/30">
-                    <p className="text-lg font-bold text-foreground">
-                      ${stats.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{project.project_name}</h3>
+                    <p className="text-xs text-gray-500">
+                      {project.admin_username ? `@${project.admin_username}` : "Bot connected"}
                     </p>
-                    <p className="text-xs text-muted-foreground">Current</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-primary/10">
-                    <p className="text-lg font-bold text-primary">
-                      ${stats.lifetimeRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Lifetime</p>
                   </div>
                 </div>
+                {getStatusBadge(project.status)}
+              </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    className="flex-1 gap-2"
-                    size="sm"
-                    onClick={() => handleEditProject(project)}
-                  >
-                    <Settings className="h-4 w-4" />
-                    Settings
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="flex-1 gap-2"
-                    size="sm"
-                    onClick={() => handleManagePlans(project)}
-                  >
-                    <Package className="h-4 w-4" />
-                    Plans
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Users className="h-4 w-4 mr-2" />
-                        View Subscribers
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <BarChart3 className="h-4 w-4 mr-2" />
-                        Analytics
-                      </DropdownMenuItem>
-                      {project.admin_username && (
-                        <DropdownMenuItem
-                          onClick={() => window.open(`https://t.me/${project.admin_username}`, "_blank")}
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Open Bot
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3 py-4 border-y border-gray-100">
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-900">{stats.subscribers}</p>
+                  <p className="text-xs text-gray-500">Active Subs</p>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-900">{stats.plans}</p>
+                  <p className="text-xs text-gray-500">Plans</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 py-4">
+                <div className="text-center p-2 rounded-lg bg-gray-50">
+                  <p className="text-sm font-semibold text-gray-900">${stats.revenue}</p>
+                  <p className="text-xs text-gray-500">Current</p>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-purple-50">
+                  <p className="text-sm font-semibold text-purple-600">${stats.lifetimeRevenue}</p>
+                  <p className="text-xs text-gray-500">Lifetime</p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  size="sm"
+                  onClick={() => handleEditProject(project)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  size="sm"
+                  onClick={() => handleManagePlans(project)}
+                >
+                  <Package className="h-4 w-4" />
+                  Plans
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem>
+                      <Users className="h-4 w-4 mr-2" />
+                      View Subscribers
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Analytics
+                    </DropdownMenuItem>
+                    {project.admin_username && (
+                      <DropdownMenuItem
+                        onClick={() => window.open(`https://t.me/${project.admin_username}`, "_blank")}
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open Bot
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           );
         })}
 
         {/* Add New Project Card */}
-        <Card
-          className="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer group"
+        <div
+          className="p-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-purple-300 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[280px] text-center"
           onClick={() => setCreateDialogOpen(true)}
         >
-          <CardContent className="flex flex-col items-center justify-center h-full min-h-[280px] text-center">
-            <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
-              <Plus className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Create New Project</h3>
-            <p className="text-sm text-muted-foreground">
-              Set up a new Telegram channel with subscription management
-            </p>
-          </CardContent>
-        </Card>
+          <div className="h-14 w-14 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
+            <Plus className="h-7 w-7 text-gray-400" />
+          </div>
+          <h3 className="font-semibold text-gray-900 mb-1">Create New Project</h3>
+          <p className="text-sm text-gray-500">
+            Set up a new Telegram channel with subscription management
+          </p>
+        </div>
       </div>
 
       {/* Dialogs */}
