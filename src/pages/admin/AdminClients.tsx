@@ -168,13 +168,11 @@ export default function AdminClients() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Client Management</h1>
-        <p className="text-muted-foreground mt-1">
-          View and manage all platform clients
-        </p>
+        <h1 className="text-xl font-semibold text-gray-900">Client Management</h1>
+        <p className="text-gray-500 text-sm">View and manage all platform clients.</p>
       </div>
 
       {/* Filters */}

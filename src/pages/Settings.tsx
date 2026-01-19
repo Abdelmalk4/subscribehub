@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
   User,
@@ -30,11 +28,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // Form state
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   
-  // Password state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -61,7 +57,6 @@ export default function Settings() {
       setEmail(data.email || user?.email || "");
     } catch (error) {
       console.error("Error fetching profile:", error);
-      // Fallback to auth user data
       setFullName(user?.user_metadata?.full_name || "");
       setEmail(user?.email || "");
     } finally {
@@ -95,16 +90,12 @@ export default function Settings() {
 
   const handleUpdatePassword = async () => {
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords don't match", {
-        description: "Please make sure your new passwords match.",
-      });
+      toast.error("Passwords don't match");
       return;
     }
 
     if (newPassword.length < 8) {
-      toast.error("Password too short", {
-        description: "Password must be at least 8 characters.",
-      });
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
@@ -140,121 +131,113 @@ export default function Settings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-8 max-w-3xl">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your account and preferences.
-        </p>
+        <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+        <p className="text-gray-500 text-sm">Manage your account and preferences.</p>
       </div>
 
       {/* Profile Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Profile
-          </CardTitle>
-          <CardDescription>Update your personal information</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <User className="h-5 w-5 text-gray-500" />
+          <h2 className="text-base font-semibold text-gray-900">Profile</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">Update your personal information</p>
+        
+        <div className="space-y-6">
           <div className="flex items-center gap-4">
-            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <span className="text-2xl font-bold text-primary-foreground">{getInitials()}</span>
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <span className="text-xl font-bold text-white">{getInitials()}</span>
             </div>
             <div>
-              <Button variant="secondary" size="sm">Change Avatar</Button>
-              <p className="text-xs text-muted-foreground mt-1">JPG, PNG or GIF. Max 2MB</p>
+              <Button variant="outline" size="sm">Change Avatar</Button>
+              <p className="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max 2MB</p>
             </div>
           </div>
 
-          <Separator className="bg-border/50" />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input 
-                id="fullName" 
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Enter your full name"
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-              />
+          <div className="border-t border-gray-100 pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input 
+                  id="fullName" 
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Notification Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Notifications
-          </CardTitle>
-          <CardDescription>Configure how you receive notifications</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell className="h-5 w-5 text-gray-500" />
+          <h2 className="text-base font-semibold text-gray-900">Notifications</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">Configure how you receive notifications</p>
+        
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p className="font-medium text-foreground">Email Notifications</p>
-              <p className="text-sm text-muted-foreground">Receive updates via email</p>
+              <p className="font-medium text-gray-900">Email Notifications</p>
+              <p className="text-sm text-gray-500">Receive updates via email</p>
             </div>
             <Switch defaultChecked />
           </div>
-          <Separator className="bg-border/50" />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p className="font-medium text-foreground">New Subscriber Alerts</p>
-              <p className="text-sm text-muted-foreground">Get notified when someone subscribes</p>
+              <p className="font-medium text-gray-900">New Subscriber Alerts</p>
+              <p className="text-sm text-gray-500">Get notified when someone subscribes</p>
             </div>
             <Switch defaultChecked />
           </div>
-          <Separator className="bg-border/50" />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
             <div>
-              <p className="font-medium text-foreground">Payment Alerts</p>
-              <p className="text-sm text-muted-foreground">Notifications for payment events</p>
+              <p className="font-medium text-gray-900">Payment Alerts</p>
+              <p className="text-sm text-gray-500">Notifications for payment events</p>
             </div>
             <Switch defaultChecked />
           </div>
-          <Separator className="bg-border/50" />
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium text-foreground">Expiry Reminders</p>
-              <p className="text-sm text-muted-foreground">Alerts for expiring subscriptions</p>
+              <p className="font-medium text-gray-900">Expiry Reminders</p>
+              <p className="text-sm text-gray-500">Alerts for expiring subscriptions</p>
             </div>
             <Switch defaultChecked />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Security Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Security
-          </CardTitle>
-          <CardDescription>Manage your account security</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Shield className="h-5 w-5 text-gray-500" />
+          <h2 className="text-base font-semibold text-gray-900">Security</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">Manage your account security</p>
+        
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="currentPassword">Current Password</Label>
             <Input 
@@ -288,7 +271,7 @@ export default function Settings() {
             </div>
           </div>
           <Button 
-            variant="secondary" 
+            variant="outline" 
             onClick={handleUpdatePassword}
             disabled={updatingPassword || !newPassword || !confirmPassword}
           >
@@ -299,8 +282,8 @@ export default function Settings() {
             )}
             Update Password
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Save Button */}
       <div className="flex justify-end">

@@ -214,13 +214,11 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-5xl">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Platform Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage payment methods, subscription plans and platform configuration
-        </p>
+        <h1 className="text-xl font-semibold text-gray-900">Platform Settings</h1>
+        <p className="text-gray-500 text-sm">Manage payment methods, subscription plans and platform configuration.</p>
       </div>
 
       {/* Payment Methods Manager */}
