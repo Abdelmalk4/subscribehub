@@ -492,7 +492,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 {status.label}
               </Badge>
               {subscriber.payment_method && (
-                <Badge variant="glass" className="text-sm">
+                <Badge variant="secondary" className="text-sm">
                   <CreditCard className="h-3 w-3 mr-1" />
                   {subscriber.payment_method}
                 </Badge>
@@ -585,7 +585,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
             {/* Info Cards */}
             <div className="grid grid-cols-2 gap-4">
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <User className="h-4 w-4" />
@@ -595,7 +595,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 </CardContent>
               </Card>
 
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <MessageSquare className="h-4 w-4" />
@@ -605,7 +605,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 </CardContent>
               </Card>
 
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <CreditCard className="h-4 w-4" />
@@ -623,7 +623,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
                 </CardContent>
               </Card>
 
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <Calendar className="h-4 w-4" />
@@ -640,7 +640,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
             {/* Invite Link */}
             {subscriber.invite_link && (
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Link2 className="h-4 w-4" />
@@ -664,7 +664,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
             {/* Notes */}
             {subscriber.notes && (
-              <Card variant="glass">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <div className="text-xs text-muted-foreground mb-2">Notes</div>
                   <p className="text-sm text-foreground">{subscriber.notes}</p>
@@ -673,7 +673,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
             )}
 
             {/* Payment Proof Section */}
-            <Card variant="glass">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <ImageIcon className="h-4 w-4" />
@@ -803,7 +803,7 @@ export function SubscriberDetails({ open, onOpenChange, subscriber, onUpdate }: 
 
               {subscriber.username && (
                 <Button
-                  variant="glass"
+                  variant="outline"
                   className="w-full gap-2"
                   onClick={() => window.open(`https://t.me/${subscriber.username}`, "_blank")}
                 >

@@ -137,7 +137,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-3xl">
       {/* Header */}
       <div>
         <h1 className="text-base font-semibold text-gray-900">Settings</h1>

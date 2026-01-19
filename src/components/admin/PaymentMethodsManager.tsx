@@ -322,7 +322,7 @@ export function PaymentMethodsManager() {
 
   if (loading) {
     return (
-      <Card variant="glass">
+      <Card>
         <CardContent className="py-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
         </CardContent>
@@ -332,7 +332,7 @@ export function PaymentMethodsManager() {
 
   return (
     <>
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>

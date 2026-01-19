@@ -265,7 +265,7 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 sm:space-y-6 w-full">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">

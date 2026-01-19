@@ -18,7 +18,7 @@ export default function HeroSection() {
 
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="text-center max-w-4xl mx-auto mb-12">
-          <Badge variant="glass-primary" className="mb-4 px-3 py-1.5 text-xs">
+          <Badge variant="info" className="mb-4 px-3 py-1.5 text-xs">
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
             The #1 Telegram Monetization Platform
           </Badge>

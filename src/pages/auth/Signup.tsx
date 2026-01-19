@@ -209,7 +209,7 @@ export default function Signup() {
       </div>
 
       <Link to="/login">
-        <Button variant="glass" className="w-full">
+        <Button variant="outline" className="w-full">
           Sign In Instead
         </Button>
       </Link>
