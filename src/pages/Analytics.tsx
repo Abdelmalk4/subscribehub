@@ -331,12 +331,12 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Analytics</h1>
-          <p className="text-gray-500 text-xs">Track your revenue and subscriber metrics.</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground">Analytics</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">Track your revenue and subscriber metrics.</p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
           <SelectTrigger className="w-[110px] h-7 text-xs">
@@ -353,7 +353,7 @@ export default function Analytics() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         {kpis.map((kpi) => (
           <Card key={kpi.title}>
             <CardContent className="pt-3 pb-3">
@@ -380,14 +380,14 @@ export default function Analytics() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* Subscriber Growth Chart - Spans 2 columns */}
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-2 pt-3 px-3">
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm">Subscriber Growth & Revenue</CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="h-[200px]">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[180px] sm:h-[220px] lg:h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dailyStats}>
                   <defs>
@@ -462,11 +462,11 @@ export default function Analytics() {
 
         {/* Subscriber Status Pie Chart */}
         <Card>
-          <CardHeader className="pb-2 pt-3 px-3">
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm">Subscriber Status</CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="h-[160px] flex items-center justify-center">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[140px] sm:h-[180px] lg:h-[210px] flex items-center justify-center">
               {subscriberStats.total > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -516,19 +516,19 @@ export default function Analytics() {
 
       {/* Cumulative Revenue Chart */}
       <Card>
-        <CardHeader className="pb-2 pt-3 px-3">
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <CardTitle className="text-sm flex items-center gap-1.5">
               <Wallet className="h-3.5 w-3.5 text-primary" />
               Cumulative Revenue Over Time
             </CardTitle>
-            <Badge variant="outline" className="text-primary border-primary/30 text-[10px] px-1.5">
+            <Badge variant="outline" className="text-primary border-primary/30 text-[10px] px-1.5 w-fit">
               Lifetime: ${lifetimeRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Badge>
           </div>
         </CardHeader>
-        <CardContent className="px-3 pb-3">
-          <div className="h-[180px]">
+        <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+          <div className="h-[160px] sm:h-[200px] lg:h-[220px]">
             {dailyStats.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={dailyStats}>
@@ -584,14 +584,14 @@ export default function Analytics() {
       </Card>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Revenue by Plan */}
         <Card>
-          <CardHeader className="pb-2 pt-3 px-3">
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm">Revenue by Plan</CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="h-[160px]">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[140px] sm:h-[180px]">
               {planRevenue.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={planRevenue} layout="vertical">
@@ -641,11 +641,11 @@ export default function Analytics() {
 
         {/* Subscribers by Project */}
         <Card>
-          <CardHeader className="pb-2 pt-3 px-3">
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm">Subscribers by Project</CardTitle>
           </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="h-[160px]">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[140px] sm:h-[180px]">
               {projectStats.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={projectStats}>

@@ -214,11 +214,11 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Platform Settings</h1>
-        <p className="text-gray-500 text-sm">Manage payment methods, subscription plans and platform configuration.</p>
+        <h1 className="text-lg sm:text-xl font-semibold text-foreground">Platform Settings</h1>
+        <p className="text-muted-foreground text-xs sm:text-sm">Manage payment methods, subscription plans and platform configuration.</p>
       </div>
 
       {/* Payment Methods Manager */}
@@ -226,15 +226,15 @@ export default function AdminSettings() {
 
       {/* Platform Configuration */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
-            <CardTitle>General Settings</CardTitle>
+            <CardTitle className="text-sm sm:text-base">General Settings</CardTitle>
           </div>
-          <CardDescription>Configure platform-wide settings</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">Configure platform-wide settings</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4 space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
               <div>
                 <Label className="text-foreground">Maintenance Mode</Label>
@@ -268,7 +268,7 @@ export default function AdminSettings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-2">
               <Label htmlFor="trialDays">Default Trial Days</Label>
               <Input
@@ -310,29 +310,29 @@ export default function AdminSettings() {
 
       {/* Subscription Plans */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
-              <CardTitle>Subscription Plans</CardTitle>
+              <CardTitle className="text-sm sm:text-base">Subscription Plans</CardTitle>
             </div>
-            <Button onClick={openNewPlanDialog}>
+            <Button onClick={openNewPlanDialog} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Plan
             </Button>
           </div>
-          <CardDescription>Manage platform subscription tiers</CardDescription>
+          <CardDescription className="text-xs sm:text-sm">Manage platform subscription tiers</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Plan Name</TableHead>
                   <TableHead>Price</TableHead>
-                  <TableHead>Projects</TableHead>
-                  <TableHead>Subscribers</TableHead>
-                  <TableHead>Billing</TableHead>
+                  <TableHead className="hidden sm:table-cell">Projects</TableHead>
+                  <TableHead className="hidden sm:table-cell">Subscribers</TableHead>
+                  <TableHead className="hidden md:table-cell">Billing</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -346,9 +346,9 @@ export default function AdminSettings() {
                     <TableCell>
                       ${Number(plan.price).toFixed(2)}
                     </TableCell>
-                    <TableCell>{plan.max_projects}</TableCell>
-                    <TableCell>{plan.max_subscribers.toLocaleString()}</TableCell>
-                    <TableCell className="capitalize">{plan.billing_cycle}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{plan.max_projects}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{plan.max_subscribers.toLocaleString()}</TableCell>
+                    <TableCell className="hidden md:table-cell capitalize">{plan.billing_cycle}</TableCell>
                     <TableCell>
                       <Badge variant={plan.is_active ? "default" : "secondary"}>
                         {plan.is_active ? "Active" : "Inactive"}

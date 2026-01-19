@@ -200,20 +200,20 @@ export default function AdminOverview() {
   }
 
   return (
-    <div className="space-y-4 max-w-6xl">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">Platform Overview</h1>
-          <p className="text-gray-500 text-xs">Monitor platform-wide statistics and performance.</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground">Platform Overview</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm">Monitor platform-wide statistics and performance.</p>
         </div>
-        <Badge variant="outline" className="text-primary border-primary text-[10px]">
+        <Badge variant="outline" className="text-primary border-primary text-[10px] w-fit">
           Super Admin
         </Badge>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {kpiCards.map((card) => (
           <Card key={card.title}>
             <CardContent className="p-3">
@@ -234,14 +234,14 @@ export default function AdminOverview() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* Growth Chart */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm font-semibold">Platform Growth</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[200px]">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[180px] sm:h-[220px] lg:h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={growthData}>
                   <defs>
@@ -291,11 +291,11 @@ export default function AdminOverview() {
 
         {/* Subscription Distribution */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
             <CardTitle className="text-sm font-semibold">Client Subscriptions</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[200px]">
+          <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="h-[180px] sm:h-[220px] lg:h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
