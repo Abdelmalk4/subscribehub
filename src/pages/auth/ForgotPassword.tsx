@@ -54,7 +54,7 @@ export default function ForgotPassword() {
           </p>
           
           <Button
-            variant="glass"
+            variant="secondary"
             className="w-full"
             onClick={() => setIsSubmitted(false)}
           >
@@ -103,7 +103,6 @@ export default function ForgotPassword() {
 
         <Button
           type="submit"
-          variant="gradient"
           size="lg"
           className="w-full"
           disabled={isLoading}

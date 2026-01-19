@@ -213,7 +213,6 @@ export function UpgradePlanDialog({
 
             <Button
               className="w-full"
-              variant="gradient"
               onClick={() => setStep("upload")}
             >
               <Upload className="h-4 w-4 mr-2" />

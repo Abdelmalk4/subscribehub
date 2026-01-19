@@ -157,7 +157,6 @@ export default function Signup() {
 
         <Button
           type="submit"
-          variant="gradient"
           size="lg"
           className="w-full"
           disabled={isLoading}

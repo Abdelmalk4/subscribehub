@@ -71,7 +71,7 @@ export default function TestimonialsSection() {
         </div>
 
         <div className="relative">
-          <Card className="bg-card/30 backdrop-blur-xl border-border/40 overflow-hidden">
+          <Card className="overflow-hidden">
             <CardContent className="p-8 md:p-12 text-center relative">
               <Quote className="absolute top-6 left-6 h-12 w-12 text-primary/20" />
               

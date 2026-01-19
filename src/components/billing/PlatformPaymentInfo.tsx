@@ -53,7 +53,7 @@ export function PlatformPaymentInfo() {
 
   if (methods.length === 0) {
     return (
-      <Card variant="glass">
+      <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
           <p>No platform payment methods available.</p>
           <p className="text-sm">Contact support for payment options.</p>
@@ -63,7 +63,7 @@ export function PlatformPaymentInfo() {
   }
 
   return (
-    <Card variant="glass">
+    <Card>
       <CardHeader>
         <CardTitle className="text-lg">Platform Payment Methods</CardTitle>
         <CardDescription>

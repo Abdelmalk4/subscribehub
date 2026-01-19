@@ -217,7 +217,7 @@ export default function AdminOverview() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((card) => (
-          <Card key={card.title} variant="glass">
+          <Card key={card.title}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -238,7 +238,7 @@ export default function AdminOverview() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Growth Chart */}
-        <Card variant="glass" className="lg:col-span-2">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Platform Growth</CardTitle>
           </CardHeader>
@@ -291,7 +291,7 @@ export default function AdminOverview() {
         </Card>
 
         {/* Subscription Distribution */}
-        <Card variant="glass">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Client Subscriptions</CardTitle>
           </CardHeader>

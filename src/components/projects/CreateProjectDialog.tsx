@@ -358,7 +358,6 @@ export function CreateProjectDialog({ open, onOpenChange, onSuccess }: CreatePro
               </Button>
               <Button
                 type="submit"
-                variant="gradient"
                 className="flex-1"
                 disabled={isSubmitting || !validationResult?.valid || isAtLimit}
               >

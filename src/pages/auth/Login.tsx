@@ -146,7 +146,6 @@ export default function Login() {
 
         <Button
           type="submit"
-          variant="gradient"
           size="lg"
           className="w-full"
           disabled={isLoading}
@@ -180,7 +179,7 @@ export default function Login() {
       </div>
 
       <Link to="/signup">
-        <Button variant="glass" className="w-full">
+        <Button variant="secondary" className="w-full">
           Create an Account
         </Button>
       </Link>

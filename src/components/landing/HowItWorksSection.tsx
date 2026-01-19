@@ -66,7 +66,7 @@ export default function HowItWorksSection() {
               <div key={step.number} className="flex flex-col items-center text-center group">
                 {/* Step Number */}
                 <div className="relative mb-6">
-                  <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-md group-hover:scale-110 transition-transform duration-300">
+                  <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
                     <span className="text-3xl font-bold text-primary-foreground">{step.number}</span>
                   </div>
                   <div className="absolute -bottom-2 -right-2 h-10 w-10 rounded-xl bg-card border border-border flex items-center justify-center group-hover:border-primary/50 transition-colors">

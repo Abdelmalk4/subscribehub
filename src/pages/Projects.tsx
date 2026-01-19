@@ -180,7 +180,7 @@ export default function Projects() {
             Manage your Telegram channels and subscription bots.
           </p>
         </div>
-        <Button variant="gradient" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
+        <Button className="gap-2" onClick={() => setCreateDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           Create Project
         </Button>
@@ -192,7 +192,7 @@ export default function Projects() {
           const stats = projectStats[project.id] || { subscribers: 0, revenue: 0, lifetimeRevenue: 0, plans: 0 };
           
           return (
-            <Card key={project.id} variant="glass-hover" className="group">
+            <Card key={project.id} className="group hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -239,7 +239,7 @@ export default function Projects() {
                 {/* Actions */}
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="glass"
+                    variant="secondary"
                     className="flex-1 gap-2"
                     size="sm"
                     onClick={() => handleEditProject(project)}
@@ -248,7 +248,7 @@ export default function Projects() {
                     Settings
                   </Button>
                   <Button
-                    variant="glass"
+                    variant="secondary"
                     className="flex-1 gap-2"
                     size="sm"
                     onClick={() => handleManagePlans(project)}
@@ -262,7 +262,7 @@ export default function Projects() {
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="glass-menu">
+                    <DropdownMenuContent align="end">
                       <DropdownMenuItem>
                         <Users className="h-4 w-4 mr-2" />
                         View Subscribers
@@ -289,7 +289,6 @@ export default function Projects() {
 
         {/* Add New Project Card */}
         <Card
-          variant="glass"
           className="border-dashed border-2 hover:border-primary/50 transition-colors cursor-pointer group"
           onClick={() => setCreateDialogOpen(true)}
         >

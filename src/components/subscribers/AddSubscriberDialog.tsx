@@ -333,7 +333,7 @@ export function AddSubscriberDialog({ open, onOpenChange, projects, onSuccess }:
               <Button type="button" variant="outline" onClick={handleClose} className="flex-1">
                 Cancel
               </Button>
-              <Button type="submit" variant="gradient" className="flex-1" disabled={isSubmitting || isAtLimit}>
+              <Button type="submit" className="flex-1" disabled={isSubmitting || isAtLimit}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

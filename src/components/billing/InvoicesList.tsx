@@ -170,7 +170,7 @@ export function InvoicesList() {
   }
 
   return (
-    <Card variant="glass">
+    <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">

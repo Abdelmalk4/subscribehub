@@ -342,11 +342,11 @@ export default function Analytics() {
         </div>
         <div className="flex gap-2">
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[140px] bg-card/30 border-border/50">
+            <SelectTrigger className="w-[140px]">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="glass-menu">
+            <SelectContent>
               <SelectItem value="7d">Last 7 days</SelectItem>
               <SelectItem value="30d">Last 30 days</SelectItem>
               <SelectItem value="90d">Last 90 days</SelectItem>
@@ -359,7 +359,7 @@ export default function Analytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {kpis.map((kpi) => (
-          <Card key={kpi.title} variant="glass-hover">
+          <Card key={kpi.title}>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div className={`h-12 w-12 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
@@ -386,7 +386,7 @@ export default function Analytics() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Subscriber Growth Chart - Spans 2 columns */}
-        <Card variant="glass" className="lg:col-span-2">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Subscriber Growth & Revenue</CardTitle>
           </CardHeader>
@@ -464,7 +464,7 @@ export default function Analytics() {
         </Card>
 
         {/* Subscriber Status Pie Chart */}
-        <Card variant="glass">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Subscriber Status</CardTitle>
           </CardHeader>
@@ -517,7 +517,7 @@ export default function Analytics() {
       </div>
 
       {/* Cumulative Revenue Chart */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -587,7 +587,7 @@ export default function Analytics() {
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue by Plan */}
-        <Card variant="glass">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Revenue by Plan</CardTitle>
           </CardHeader>
@@ -640,7 +640,7 @@ export default function Analytics() {
         </Card>
 
         {/* Subscribers by Project */}
-        <Card variant="glass">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Subscribers by Project</CardTitle>
           </CardHeader>
@@ -690,7 +690,7 @@ export default function Analytics() {
 
       {/* Quick Stats Table */}
       {projectStats.length > 0 && (
-        <Card variant="glass">
+        <Card>
           <CardHeader>
             <CardTitle className="text-lg">Project Performance</CardTitle>
           </CardHeader>

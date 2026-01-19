@@ -267,7 +267,6 @@ export default function AdminPayments() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card
-          variant="glass"
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("pending")}
         >
@@ -282,7 +281,6 @@ export default function AdminPayments() {
           </CardContent>
         </Card>
         <Card
-          variant="glass"
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("approved")}
         >
@@ -297,7 +295,6 @@ export default function AdminPayments() {
           </CardContent>
         </Card>
         <Card
-          variant="glass"
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => setStatusFilter("rejected")}
         >
@@ -311,7 +308,7 @@ export default function AdminPayments() {
             </div>
           </CardContent>
         </Card>
-        <Card variant="glass">
+        <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -327,7 +324,7 @@ export default function AdminPayments() {
       </div>
 
       {/* Filters */}
-      <Card variant="glass">
+      <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -356,7 +353,7 @@ export default function AdminPayments() {
       </Card>
 
       {/* Payments Table */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg">
             Payments ({filteredPayments.length})

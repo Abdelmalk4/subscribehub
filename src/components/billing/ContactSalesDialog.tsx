@@ -99,7 +99,7 @@ export function ContactSalesDialog({ open, onOpenChange }: ContactSalesDialogPro
             <DialogDescription className="text-base">
               Our sales team will contact you within 24 hours to discuss your enterprise needs.
             </DialogDescription>
-            <Button variant="gradient" className="mt-6" onClick={handleClose}>
+            <Button className="mt-6" onClick={handleClose}>
               Close
             </Button>
           </div>
@@ -158,7 +158,7 @@ export function ContactSalesDialog({ open, onOpenChange }: ContactSalesDialogPro
                 />
               </div>
 
-              <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (

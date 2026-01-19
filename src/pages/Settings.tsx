@@ -156,7 +156,7 @@ export default function Settings() {
       </div>
 
       {/* Profile Settings */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <User className="h-5 w-5" />
@@ -170,7 +170,7 @@ export default function Settings() {
               <span className="text-2xl font-bold text-primary-foreground">{getInitials()}</span>
             </div>
             <div>
-              <Button variant="glass" size="sm">Change Avatar</Button>
+              <Button variant="secondary" size="sm">Change Avatar</Button>
               <p className="text-xs text-muted-foreground mt-1">JPG, PNG or GIF. Max 2MB</p>
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function Settings() {
       </Card>
 
       {/* Notification Settings */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Bell className="h-5 w-5" />
@@ -246,7 +246,7 @@ export default function Settings() {
       </Card>
 
       {/* Security Settings */}
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Shield className="h-5 w-5" />
@@ -288,7 +288,7 @@ export default function Settings() {
             </div>
           </div>
           <Button 
-            variant="glass" 
+            variant="secondary" 
             onClick={handleUpdatePassword}
             disabled={updatingPassword || !newPassword || !confirmPassword}
           >
@@ -304,7 +304,7 @@ export default function Settings() {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button variant="gradient" onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           ) : (

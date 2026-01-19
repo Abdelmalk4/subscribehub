@@ -36,12 +36,12 @@ export default function HeroSection() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
             <Link to="/signup">
-              <Button variant="gradient" size="xl" className="gap-2 min-w-[220px] btn-glow">
+              <Button size="xl" className="gap-2 min-w-[220px]">
                 <Rocket className="h-5 w-5" />
                 Start Free Trial
               </Button>
             </Link>
-            <Button variant="glass" size="xl" className="min-w-[200px] gap-2">
+            <Button variant="secondary" size="xl" className="min-w-[200px] gap-2">
               <Play className="h-5 w-5" />
               Watch Demo
             </Button>

@@ -287,7 +287,7 @@ export function ClientPaymentMethodsManager() {
   }
 
   return (
-    <Card variant="glass">
+    <Card>
       <CardHeader>
         <CardTitle className="text-lg">Your Payment Methods</CardTitle>
         <CardDescription>
