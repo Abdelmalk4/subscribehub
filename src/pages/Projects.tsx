@@ -161,35 +161,35 @@ export default function Projects() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-4 max-w-4xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
-          <p className="text-gray-500 text-sm">Manage your Telegram channels and subscription bots.</p>
+          <h1 className="text-base font-semibold text-gray-900">Projects</h1>
+          <p className="text-gray-500 text-xs">Manage your Telegram channels and subscription bots.</p>
         </div>
-        <Button className="gap-2" onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
+        <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setCreateDialogOpen(true)}>
+          <Plus className="h-3 w-3" />
           Create Project
         </Button>
       </div>
 
       {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {projects.map((project) => {
           const stats = projectStats[project.id] || { subscribers: 0, revenue: 0, lifetimeRevenue: 0, plans: 0 };
           
           return (
-            <div key={project.id} className="p-5 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-shadow">
+            <div key={project.id} className="p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
               {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-purple-600" />
+              <div className="flex items-start justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-md bg-purple-100 flex items-center justify-center">
+                    <Bot className="h-3.5 w-3.5 text-purple-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{project.project_name}</h3>
-                    <p className="text-xs text-gray-500">
+                    <h3 className="font-medium text-gray-900 text-sm">{project.project_name}</h3>
+                    <p className="text-[10px] text-gray-500">
                       {project.admin_username ? `@${project.admin_username}` : "Bot connected"}
                     </p>
                   </div>
@@ -198,68 +198,69 @@ export default function Projects() {
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-3 py-4 border-y border-gray-100">
+              <div className="grid grid-cols-2 gap-2 py-2.5 border-y border-gray-100">
                 <div className="text-center">
-                  <p className="text-xl font-bold text-gray-900">{stats.subscribers}</p>
-                  <p className="text-xs text-gray-500">Active Subs</p>
+                  <p className="text-lg font-bold text-gray-900">{stats.subscribers}</p>
+                  <p className="text-[10px] text-gray-500">Active Subs</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-gray-900">{stats.plans}</p>
-                  <p className="text-xs text-gray-500">Plans</p>
+                  <p className="text-lg font-bold text-gray-900">{stats.plans}</p>
+                  <p className="text-[10px] text-gray-500">Plans</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 py-4">
-                <div className="text-center p-2 rounded-lg bg-gray-50">
-                  <p className="text-sm font-semibold text-gray-900">${stats.revenue}</p>
-                  <p className="text-xs text-gray-500">Current</p>
+              <div className="grid grid-cols-2 gap-2 py-2.5">
+                <div className="text-center p-1.5 rounded-md bg-gray-50">
+                  <p className="text-xs font-semibold text-gray-900">${stats.revenue}</p>
+                  <p className="text-[10px] text-gray-500">Current</p>
                 </div>
-                <div className="text-center p-2 rounded-lg bg-purple-50">
-                  <p className="text-sm font-semibold text-purple-600">${stats.lifetimeRevenue}</p>
-                  <p className="text-xs text-gray-500">Lifetime</p>
+                <div className="text-center p-1.5 rounded-md bg-purple-50">
+                  <p className="text-xs font-semibold text-purple-600">${stats.lifetimeRevenue}</p>
+                  <p className="text-[10px] text-gray-500">Lifetime</p>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-1.5 pt-1.5">
                 <Button
                   variant="outline"
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-1.5 h-6 text-[10px]"
                   size="sm"
                   onClick={() => handleEditProject(project)}
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings className="h-3 w-3" />
                   Settings
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-1.5 h-6 text-[10px]"
                   size="sm"
                   onClick={() => handleManagePlans(project)}
                 >
-                  <Package className="h-4 w-4" />
+                  <Package className="h-3 w-3" />
                   Plans
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreVertical className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                      <MoreVertical className="h-3 w-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Users className="h-4 w-4 mr-2" />
+                    <DropdownMenuItem className="text-xs">
+                      <Users className="h-3 w-3 mr-1.5" />
                       View Subscribers
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <BarChart3 className="h-4 w-4 mr-2" />
+                    <DropdownMenuItem className="text-xs">
+                      <BarChart3 className="h-3 w-3 mr-1.5" />
                       Analytics
                     </DropdownMenuItem>
                     {project.admin_username && (
                       <DropdownMenuItem
+                        className="text-xs"
                         onClick={() => window.open(`https://t.me/${project.admin_username}`, "_blank")}
                       >
-                        <ExternalLink className="h-4 w-4 mr-2" />
+                        <ExternalLink className="h-3 w-3 mr-1.5" />
                         Open Bot
                       </DropdownMenuItem>
                     )}
@@ -272,14 +273,14 @@ export default function Projects() {
 
         {/* Add New Project Card */}
         <div
-          className="p-5 border-2 border-dashed border-gray-200 rounded-xl hover:border-purple-300 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[280px] text-center"
+          className="p-3 border-2 border-dashed border-gray-200 rounded-lg hover:border-purple-300 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[200px] text-center"
           onClick={() => setCreateDialogOpen(true)}
         >
-          <div className="h-14 w-14 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-            <Plus className="h-7 w-7 text-gray-400" />
+          <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center mb-2.5">
+            <Plus className="h-5 w-5 text-gray-400" />
           </div>
-          <h3 className="font-semibold text-gray-900 mb-1">Create New Project</h3>
-          <p className="text-sm text-gray-500">
+          <h3 className="font-medium text-gray-900 text-sm mb-0.5">Create New Project</h3>
+          <p className="text-[10px] text-gray-500">
             Set up a new Telegram channel with subscription management
           </p>
         </div>

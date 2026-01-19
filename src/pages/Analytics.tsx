@@ -331,48 +331,48 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-4 max-w-5xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Analytics</h1>
-          <p className="text-gray-500 text-sm">Track your revenue and subscriber metrics.</p>
+          <h1 className="text-base font-semibold text-gray-900">Analytics</h1>
+          <p className="text-gray-500 text-xs">Track your revenue and subscriber metrics.</p>
         </div>
         <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[140px]">
-            <Calendar className="h-4 w-4 mr-2" />
+          <SelectTrigger className="w-[110px] h-7 text-xs">
+            <Calendar className="h-3 w-3 mr-1.5" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="7d">Last 7 days</SelectItem>
-            <SelectItem value="30d">Last 30 days</SelectItem>
-            <SelectItem value="90d">Last 90 days</SelectItem>
-            <SelectItem value="1y">Last year</SelectItem>
+            <SelectItem value="7d" className="text-xs">Last 7 days</SelectItem>
+            <SelectItem value="30d" className="text-xs">Last 30 days</SelectItem>
+            <SelectItem value="90d" className="text-xs">Last 90 days</SelectItem>
+            <SelectItem value="1y" className="text-xs">Last year</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
         {kpis.map((kpi) => (
           <Card key={kpi.title}>
-            <CardContent className="pt-6">
+            <CardContent className="pt-3 pb-3">
               <div className="flex items-center justify-between">
-                <div className={`h-12 w-12 rounded-xl ${kpi.bgColor} flex items-center justify-center`}>
-                  <kpi.icon className={`h-6 w-6 ${kpi.color}`} />
+                <div className={`h-8 w-8 rounded-lg ${kpi.bgColor} flex items-center justify-center`}>
+                  <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
                 </div>
-                <Badge variant={kpi.isPositive ? "success" : "error"} className="gap-1">
+                <Badge variant={kpi.isPositive ? "success" : "error"} className="gap-0.5 text-[10px] px-1.5 py-0.5">
                   {kpi.isPositive ? (
-                    <ArrowUpRight className="h-3 w-3" />
+                    <ArrowUpRight className="h-2.5 w-2.5" />
                   ) : (
-                    <ArrowDownRight className="h-3 w-3" />
+                    <ArrowDownRight className="h-2.5 w-2.5" />
                   )}
                   {kpi.change}
                 </Badge>
               </div>
-              <div className="mt-4">
-                <p className="text-3xl font-bold text-foreground">{kpi.value}</p>
-                <p className="text-sm text-muted-foreground">{kpi.title}</p>
+              <div className="mt-2.5">
+                <p className="text-xl font-bold text-foreground">{kpi.value}</p>
+                <p className="text-[10px] text-muted-foreground">{kpi.title}</p>
               </div>
             </CardContent>
           </Card>

@@ -137,51 +137,53 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-4 max-w-2xl">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
-        <p className="text-gray-500 text-sm">Manage your account and preferences.</p>
+        <h1 className="text-base font-semibold text-gray-900">Settings</h1>
+        <p className="text-gray-500 text-xs">Manage your account and preferences.</p>
       </div>
 
       {/* Profile Settings */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <User className="h-5 w-5 text-gray-500" />
-          <h2 className="text-base font-semibold text-gray-900">Profile</h2>
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-1.5 mb-2">
+          <User className="h-3.5 w-3.5 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Profile</h2>
         </div>
-        <p className="text-sm text-gray-500 mb-6">Update your personal information</p>
+        <p className="text-xs text-gray-500 mb-4">Update your personal information</p>
         
-        <div className="space-y-6">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <span className="text-xl font-bold text-white">{getInitials()}</span>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <span className="text-sm font-bold text-white">{getInitials()}</span>
             </div>
             <div>
-              <Button variant="outline" size="sm">Change Avatar</Button>
-              <p className="text-xs text-gray-500 mt-1">JPG, PNG or GIF. Max 2MB</p>
+              <Button variant="outline" size="sm" className="h-6 text-xs px-2">Change Avatar</Button>
+              <p className="text-[10px] text-gray-500 mt-0.5">JPG, PNG or GIF. Max 2MB</p>
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="fullName">Full Name</Label>
+          <div className="border-t border-gray-100 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="fullName" className="text-xs">Full Name</Label>
                 <Input 
                   id="fullName" 
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Enter your full name"
+                  className="h-8 text-sm"
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="email">Email Address</Label>
+              <div className="space-y-1 md:col-span-2">
+                <Label htmlFor="email" className="text-xs">Email Address</Label>
                 <Input 
                   id="email" 
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  className="h-8 text-sm"
                 />
               </div>
             </div>
@@ -190,95 +192,100 @@ export default function Settings() {
       </div>
 
       {/* Notification Settings */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Bell className="h-5 w-5 text-gray-500" />
-          <h2 className="text-base font-semibold text-gray-900">Notifications</h2>
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Bell className="h-3.5 w-3.5 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Notifications</h2>
         </div>
-        <p className="text-sm text-gray-500 mb-6">Configure how you receive notifications</p>
+        <p className="text-xs text-gray-500 mb-4">Configure how you receive notifications</p>
         
-        <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <div>
-              <p className="font-medium text-gray-900">Email Notifications</p>
-              <p className="text-sm text-gray-500">Receive updates via email</p>
+              <p className="font-medium text-gray-900 text-xs">Email Notifications</p>
+              <p className="text-[10px] text-gray-500">Receive updates via email</p>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="scale-75" />
           </div>
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <div>
-              <p className="font-medium text-gray-900">New Subscriber Alerts</p>
-              <p className="text-sm text-gray-500">Get notified when someone subscribes</p>
+              <p className="font-medium text-gray-900 text-xs">New Subscriber Alerts</p>
+              <p className="text-[10px] text-gray-500">Get notified when someone subscribes</p>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="scale-75" />
           </div>
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <div>
-              <p className="font-medium text-gray-900">Payment Alerts</p>
-              <p className="text-sm text-gray-500">Notifications for payment events</p>
+              <p className="font-medium text-gray-900 text-xs">Payment Alerts</p>
+              <p className="text-[10px] text-gray-500">Notifications for payment events</p>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="scale-75" />
           </div>
-          <div className="flex items-center justify-between py-3">
+          <div className="flex items-center justify-between py-2">
             <div>
-              <p className="font-medium text-gray-900">Expiry Reminders</p>
-              <p className="text-sm text-gray-500">Alerts for expiring subscriptions</p>
+              <p className="font-medium text-gray-900 text-xs">Expiry Reminders</p>
+              <p className="text-[10px] text-gray-500">Alerts for expiring subscriptions</p>
             </div>
-            <Switch defaultChecked />
+            <Switch defaultChecked className="scale-75" />
           </div>
         </div>
       </div>
 
       {/* Security Settings */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="h-5 w-5 text-gray-500" />
-          <h2 className="text-base font-semibold text-gray-900">Security</h2>
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Shield className="h-3.5 w-3.5 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-900">Security</h2>
         </div>
-        <p className="text-sm text-gray-500 mb-6">Manage your account security</p>
+        <p className="text-xs text-gray-500 mb-4">Manage your account security</p>
         
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="currentPassword" className="text-xs">Current Password</Label>
             <Input 
               id="currentPassword" 
               type="password" 
               placeholder="••••••••"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              className="h-8 text-sm"
             />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="newPassword" className="text-xs">New Password</Label>
               <Input 
                 id="newPassword" 
                 type="password" 
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                className="h-8 text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <div className="space-y-1">
+              <Label htmlFor="confirmPassword" className="text-xs">Confirm Password</Label>
               <Input 
                 id="confirmPassword" 
                 type="password" 
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                className="h-8 text-sm"
               />
             </div>
           </div>
           <Button 
             variant="outline" 
+            size="sm"
+            className="h-7 text-xs"
             onClick={handleUpdatePassword}
             disabled={updatingPassword || !newPassword || !confirmPassword}
           >
             {updatingPassword ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
             ) : (
-              <Key className="h-4 w-4 mr-2" />
+              <Key className="h-3 w-3 mr-1.5" />
             )}
             Update Password
           </Button>
@@ -287,11 +294,11 @@ export default function Settings() {
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={saving}>
           {saving ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
           ) : (
-            <Save className="h-4 w-4 mr-2" />
+            <Save className="h-3 w-3 mr-1.5" />
           )}
           Save Changes
         </Button>

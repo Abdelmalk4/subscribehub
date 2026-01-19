@@ -31,29 +31,29 @@ export function PlanCard({
   disabled = false,
 }: PlanCardProps) {
   return (
-    <div className="flex flex-col h-full p-5 border border-gray-200 rounded-xl bg-white">
+    <div className="flex flex-col h-full p-3 border border-gray-200 rounded-lg bg-white">
       {/* Header with icon and price */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", iconColors[iconColor])}>
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div className="flex items-start justify-between mb-2.5">
+        <div className="flex items-center gap-2">
+          <div className={cn("w-6 h-6 rounded-md flex items-center justify-center", iconColors[iconColor])}>
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M3 9h18" />
               <path d="M9 21V9" />
             </svg>
           </div>
-          <span className="font-semibold text-gray-900">{planName}</span>
+          <span className="font-medium text-gray-900 text-sm">{planName}</span>
         </div>
-        <span className="text-gray-900 font-medium">
+        <span className="text-gray-900 font-medium text-sm">
           ${price}{period}
         </span>
       </div>
 
       {/* Features */}
-      <ul className="space-y-2.5 flex-1 mb-5">
+      <ul className="space-y-1.5 flex-1 mb-3">
         {features.slice(0, 5).map((feature, index) => (
-          <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
-            <Check className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+          <li key={index} className="flex items-start gap-1.5 text-xs text-gray-600">
+            <Check className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
             <span>{feature}</span>
           </li>
         ))}
@@ -62,7 +62,8 @@ export function PlanCard({
       {/* CTA Button */}
       <Button
         variant="outline"
-        className="w-full"
+        size="sm"
+        className="w-full text-xs h-7"
         disabled={isCurrentPlan || disabled}
         onClick={onSelectPlan}
       >

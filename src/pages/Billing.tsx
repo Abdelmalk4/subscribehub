@@ -265,32 +265,32 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-4 max-w-4xl">
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-            <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-gray-100 flex items-center justify-center">
+            <svg className="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M3 9h18" />
               <path d="M9 21V9" />
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Plans & billing</h1>
-            <p className="text-gray-500 text-sm">Manage your plan and billing history here.</p>
+            <h1 className="text-base font-semibold text-gray-900">Plans & billing</h1>
+            <p className="text-gray-500 text-xs">Manage your plan and billing history here.</p>
           </div>
         </div>
-        <Avatar className="h-9 w-9">
+        <Avatar className="h-6 w-6">
           <AvatarImage src="" />
-          <AvatarFallback className="bg-gray-100 text-gray-600 text-sm">
+          <AvatarFallback className="bg-gray-100 text-gray-600 text-[10px]">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </AvatarFallback>
         </Avatar>
       </div>
 
       {/* Plans Section - 3 columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         {plans.map((plan, index) => {
           const isCurrentPlan = getCurrentPlanSlug() === plan.plan_slug;
           const isUnlimited = plan.plan_slug === "unlimited";
@@ -327,15 +327,15 @@ export default function Billing() {
 
       {/* Previous Invoices Section */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <h2 className="text-base font-semibold text-gray-900">Previous invoices</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+          <h2 className="text-sm font-semibold text-gray-900">Previous invoices</h2>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {/* Quick Filter Tabs */}
-            <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <div className="flex bg-gray-100 rounded-md p-0.5">
               <button
                 onClick={() => setInvoiceFilter("all")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "all"
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -345,7 +345,7 @@ export default function Billing() {
               </button>
               <button
                 onClick={() => setInvoiceFilter("active")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "active"
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -355,7 +355,7 @@ export default function Billing() {
               </button>
               <button
                 onClick={() => setInvoiceFilter("archived")}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "archived"
                     ? "bg-white text-gray-900 shadow-sm"
                     : "text-gray-600 hover:text-gray-900"
@@ -367,64 +367,64 @@ export default function Billing() {
 
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
               <Input
                 placeholder="Search"
                 value={invoiceSearch}
                 onChange={(e) => setInvoiceSearch(e.target.value)}
-                className="pl-9 w-40"
+                className="pl-7 w-28 h-7 text-xs"
               />
             </div>
 
             {/* Sort Button */}
-            <Button variant="outline" size="sm" className="gap-2">
-              <SlidersHorizontal className="h-4 w-4" />
+            <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs px-2">
+              <SlidersHorizontal className="h-3 w-3" />
               Most recent
             </Button>
           </div>
         </div>
 
         {/* Invoices Table */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
           {filteredInvoices.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <p>No invoices found.</p>
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-xs">No invoices found.</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-gray-100">
-                  <TableHead className="w-10 pl-4">
-                    <Checkbox />
+                  <TableHead className="w-8 pl-3">
+                    <Checkbox className="scale-75" />
                   </TableHead>
-                  <TableHead className="font-medium text-gray-500">Invoice</TableHead>
-                  <TableHead className="font-medium text-gray-500">Date</TableHead>
-                  <TableHead className="font-medium text-gray-500">Plan</TableHead>
-                  <TableHead className="font-medium text-gray-500">Amount</TableHead>
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="font-medium text-gray-500 text-xs py-2">Invoice</TableHead>
+                  <TableHead className="font-medium text-gray-500 text-xs py-2">Date</TableHead>
+                  <TableHead className="font-medium text-gray-500 text-xs py-2">Plan</TableHead>
+                  <TableHead className="font-medium text-gray-500 text-xs py-2">Amount</TableHead>
+                  <TableHead className="w-8"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredInvoices.map((invoice) => (
                   <TableRow key={invoice.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                    <TableCell className="pl-4">
-                      <Checkbox />
+                    <TableCell className="pl-3 py-2">
+                      <Checkbox className="scale-75" />
                     </TableCell>
-                    <TableCell className="font-medium text-gray-900">
+                    <TableCell className="font-medium text-gray-900 text-xs py-2">
                       {invoice.invoice_number}
                     </TableCell>
-                    <TableCell className="text-gray-500">
+                    <TableCell className="text-gray-500 text-xs py-2">
                       {format(new Date(invoice.created_at), "d MMM yyyy")}
                     </TableCell>
-                    <TableCell className="text-gray-500">
+                    <TableCell className="text-gray-500 text-xs py-2">
                       {invoice.plan?.plan_name || "—"}
                     </TableCell>
-                    <TableCell className="text-gray-900">
+                    <TableCell className="text-gray-900 text-xs py-2">
                       USD ${invoice.amount.toFixed(2)}
                     </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-600">
-                        <Download className="h-4 w-4" />
+                    <TableCell className="py-2">
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-gray-600">
+                        <Download className="h-3 w-3" />
                       </Button>
                     </TableCell>
                   </TableRow>
