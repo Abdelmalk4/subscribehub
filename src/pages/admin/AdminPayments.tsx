@@ -57,6 +57,8 @@ interface Payment {
   notes: string | null;
   created_at: string | null;
   plan_id: string | null;
+  invoice_number?: string;
+  subscription_id?: string | null;
   clientEmail?: string;
   clientName?: string;
   planName?: string;
@@ -95,9 +97,10 @@ export default function AdminPayments() {
   const fetchPayments = async () => {
     setLoading(true);
 
-    // Fetch payments with client info
+    // Fetch from invoices table instead of client_subscription_payments
+    // This ensures payment proofs from the upgrade flow appear here
     const { data: paymentsData, error } = await supabase
-      .from("client_subscription_payments")
+      .from("invoices")
       .select("*")
       .order("created_at", { ascending: false });
 
@@ -125,14 +128,24 @@ export default function AdminPayments() {
     );
     const plansMap = new Map((plansRes.data || []).map((p) => [p.id, p.plan_name]));
 
-    // Enrich payments
-    const enrichedPayments = (paymentsData || []).map((payment) => {
-      const profile = profilesMap.get(payment.client_id);
+    // Enrich payments - map invoice fields to payment interface
+    const enrichedPayments = (paymentsData || []).map((invoice) => {
+      const profile = profilesMap.get(invoice.client_id);
       return {
-        ...payment,
+        id: invoice.id,
+        client_id: invoice.client_id,
+        amount: invoice.amount,
+        status: invoice.status === "paid" ? "approved" : invoice.status,
+        payment_method: invoice.payment_method,
+        payment_proof_url: invoice.payment_proof_url,
+        notes: invoice.notes,
+        created_at: invoice.created_at,
+        plan_id: invoice.plan_id,
+        invoice_number: invoice.invoice_number,
+        subscription_id: invoice.subscription_id,
         clientEmail: profile?.email || "Unknown",
         clientName: profile?.full_name || "Unknown Client",
-        planName: payment.plan_id ? plansMap.get(payment.plan_id) || "Unknown Plan" : "N/A",
+        planName: invoice.plan_id ? plansMap.get(invoice.plan_id) || "Unknown Plan" : "N/A",
       };
     });
 
@@ -140,10 +153,10 @@ export default function AdminPayments() {
 
     // Calculate stats
     const pending = enrichedPayments.filter((p) => p.status === "pending").length;
-    const approved = enrichedPayments.filter((p) => p.status === "approved").length;
+    const approved = enrichedPayments.filter((p) => p.status === "approved" || p.status === "paid").length;
     const rejected = enrichedPayments.filter((p) => p.status === "rejected").length;
     const totalAmount = enrichedPayments
-      .filter((p) => p.status === "approved")
+      .filter((p) => p.status === "approved" || p.status === "paid")
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
     setStats({ pending, approved, rejected, totalAmount });
@@ -182,13 +195,15 @@ export default function AdminPayments() {
       return;
     }
 
+    // Update invoices table instead of client_subscription_payments
     const { error } = await supabase
-      .from("client_subscription_payments")
+      .from("invoices")
       .update({
-        status: action === "approve" ? "approved" : "rejected",
-        notes: reviewNotes || null,
+        status: action === "approve" ? "paid" : "rejected",
+        admin_notes: reviewNotes || null,
         reviewed_at: new Date().toISOString(),
         reviewed_by: user.id,
+        paid_at: action === "approve" ? new Date().toISOString() : null,
       })
       .eq("id", selectedPayment.id);
 

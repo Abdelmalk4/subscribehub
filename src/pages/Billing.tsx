@@ -24,6 +24,10 @@ import {
 import { ContactSalesDialog } from "@/components/billing/ContactSalesDialog";
 import { UpgradePlanDialog } from "@/components/billing/UpgradePlanDialog";
 import { PlanCard } from "@/components/billing/PlanCard";
+import { CurrentPlanCard } from "@/components/billing/CurrentPlanCard";
+import { UsageSummaryCard } from "@/components/billing/UsageSummaryCard";
+import { BillingCycleToggle } from "@/components/billing/BillingCycleToggle";
+import { PaymentMethodsCard } from "@/components/billing/PaymentMethodsCard";
 import { InvoiceProofUpload } from "@/components/billing/InvoiceProofUpload";
 import {
   Table,
@@ -42,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface SubscriptionPlan {
   id: string;
@@ -79,6 +84,13 @@ export default function Billing() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  // Usage stats
+  const [projectsUsed, setProjectsUsed] = useState(0);
+  const [subscribersUsed, setSubscribersUsed] = useState(0);
+
+  // Billing cycle toggle
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
   // Filter states
   const [invoiceFilter, setInvoiceFilter] = useState<"all" | "active" | "archived">("all");
@@ -175,6 +187,31 @@ export default function Billing() {
           }))
         );
       }
+
+      // Fetch usage stats - projects count
+      const { count: projectCount } = await supabase
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      setProjectsUsed(projectCount || 0);
+
+      // Fetch usage stats - subscribers count (across all user's projects)
+      const { data: userProjects } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("user_id", user.id);
+
+      if (userProjects && userProjects.length > 0) {
+        const projectIds = userProjects.map((p) => p.id);
+        const { count: subscriberCount } = await supabase
+          .from("subscribers")
+          .select("*", { count: "exact", head: true })
+          .in("project_id", projectIds)
+          .eq("status", "active");
+
+        setSubscribersUsed(subscriberCount || 0);
+      }
     } catch (error) {
       console.error("Error fetching billing data:", error);
     } finally {
@@ -243,6 +280,20 @@ export default function Billing() {
     return colors[index % colors.length];
   };
 
+  // Get status badge for invoice
+  const getInvoiceStatusBadge = (status: string) => {
+    switch (status) {
+      case "paid":
+        return <Badge variant="success" className="text-[10px]">Paid</Badge>;
+      case "pending":
+        return <Badge variant="warning" className="text-[10px]">Pending</Badge>;
+      case "rejected":
+        return <Badge variant="destructive" className="text-[10px]">Rejected</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-[10px]">{status}</Badge>;
+    }
+  };
+
   // Filter invoices
   const filteredInvoices = invoices.filter((inv) => {
     const matchesFilter =
@@ -259,7 +310,7 @@ export default function Billing() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -269,25 +320,46 @@ export default function Billing() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-gray-100 flex items-center justify-center">
-            <svg className="w-3.5 h-3.5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <div className="w-7 h-7 rounded-md bg-muted flex items-center justify-center">
+            <svg className="w-3.5 h-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M3 9h18" />
               <path d="M9 21V9" />
             </svg>
           </div>
           <div>
-            <h1 className="text-base font-semibold text-gray-900">Plans & billing</h1>
-            <p className="text-gray-500 text-xs">Manage your plan and billing history here.</p>
+            <h1 className="text-base font-semibold text-foreground">Plans & billing</h1>
+            <p className="text-muted-foreground text-xs">Manage your plan and billing history here.</p>
           </div>
         </div>
         <Avatar className="h-6 w-6">
           <AvatarImage src="" />
-          <AvatarFallback className="bg-gray-100 text-gray-600 text-[10px]">
+          <AvatarFallback className="bg-muted text-muted-foreground text-[10px]">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </AvatarFallback>
         </Avatar>
       </div>
+
+      {/* Current Plan & Usage Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <CurrentPlanCard
+          planName={subscription?.plan?.plan_name || null}
+          status={subscription?.status || "trial"}
+          billingCycle={subscription?.plan?.billing_cycle || "monthly"}
+          currentPeriodEnd={subscription?.current_period_end || null}
+          trialEndsAt={subscription?.trial_ends_at || null}
+          onCancelSubscription={() => setCancelDialogOpen(true)}
+        />
+        <UsageSummaryCard
+          projectsUsed={projectsUsed}
+          maxProjects={subscription?.plan?.max_projects || 1}
+          subscribersUsed={subscribersUsed}
+          maxSubscribers={subscription?.plan?.max_subscribers || 50}
+        />
+      </div>
+
+      {/* Billing Cycle Toggle */}
+      <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
 
       {/* Plans Section - 3 columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
@@ -306,6 +378,7 @@ export default function Billing() {
                 isCurrentPlan={isCurrentPlan}
                 onSelectPlan={() => setContactSalesOpen(true)}
                 disabled={actionLoading}
+                billingCycle={billingCycle}
               />
             );
           }
@@ -320,25 +393,29 @@ export default function Billing() {
               isCurrentPlan={isCurrentPlan}
               onSelectPlan={() => openUpgradeDialog(plan)}
               disabled={actionLoading}
+              billingCycle={billingCycle}
             />
           );
         })}
       </div>
 
+      {/* Payment Methods Card */}
+      <PaymentMethodsCard />
+
       {/* Previous Invoices Section */}
       <div>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
-          <h2 className="text-sm font-semibold text-gray-900">Previous invoices</h2>
+          <h2 className="text-sm font-semibold text-foreground">Previous invoices</h2>
 
           <div className="flex items-center gap-2">
             {/* Quick Filter Tabs */}
-            <div className="flex bg-gray-100 rounded-md p-0.5">
+            <div className="flex bg-muted rounded-md p-0.5">
               <button
                 onClick={() => setInvoiceFilter("all")}
                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "all"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 View all
@@ -347,8 +424,8 @@ export default function Billing() {
                 onClick={() => setInvoiceFilter("active")}
                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "active"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Active
@@ -357,8 +434,8 @@ export default function Billing() {
                 onClick={() => setInvoiceFilter("archived")}
                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   invoiceFilter === "archived"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Archived
@@ -367,7 +444,7 @@ export default function Billing() {
 
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
               <Input
                 placeholder="Search"
                 value={invoiceSearch}
@@ -385,45 +462,49 @@ export default function Billing() {
         </div>
 
         {/* Invoices Table */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+        <div className="border border-border rounded-lg overflow-hidden bg-card">
           {filteredInvoices.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               <p className="text-xs">No invoices found.</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-gray-100">
+                <TableRow className="border-b border-border">
                   <TableHead className="w-8 pl-3">
                     <Checkbox className="scale-75" />
                   </TableHead>
-                  <TableHead className="font-medium text-gray-500 text-xs py-2">Invoice</TableHead>
-                  <TableHead className="font-medium text-gray-500 text-xs py-2">Date</TableHead>
-                  <TableHead className="font-medium text-gray-500 text-xs py-2">Plan</TableHead>
-                  <TableHead className="font-medium text-gray-500 text-xs py-2">Amount</TableHead>
+                  <TableHead className="font-medium text-muted-foreground text-xs py-2">Invoice</TableHead>
+                  <TableHead className="font-medium text-muted-foreground text-xs py-2">Date</TableHead>
+                  <TableHead className="font-medium text-muted-foreground text-xs py-2 hidden sm:table-cell">Plan</TableHead>
+                  <TableHead className="font-medium text-muted-foreground text-xs py-2">Amount</TableHead>
+                  <TableHead className="font-medium text-muted-foreground text-xs py-2">Status</TableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredInvoices.map((invoice) => (
-                  <TableRow key={invoice.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <TableRow key={invoice.id} className="border-b border-border/50 hover:bg-muted/30">
                     <TableCell className="pl-3 py-2">
                       <Checkbox className="scale-75" />
                     </TableCell>
-                    <TableCell className="font-medium text-gray-900 text-xs py-2">
+                    <TableCell className="font-medium text-foreground text-xs py-2">
                       {invoice.invoice_number}
                     </TableCell>
-                    <TableCell className="text-gray-500 text-xs py-2">
+                    <TableCell className="text-muted-foreground text-xs py-2">
                       {format(new Date(invoice.created_at), "d MMM yyyy")}
                     </TableCell>
-                    <TableCell className="text-gray-500 text-xs py-2">
+                    <TableCell className="text-muted-foreground text-xs py-2 hidden sm:table-cell">
                       {invoice.plan?.plan_name || "—"}
                     </TableCell>
-                    <TableCell className="text-gray-900 text-xs py-2">
+                    <TableCell className="text-foreground text-xs py-2">
                       USD ${invoice.amount.toFixed(2)}
                     </TableCell>
                     <TableCell className="py-2">
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-gray-600">
+                      {getInvoiceStatusBadge(invoice.status)}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
                         <Download className="h-3 w-3" />
                       </Button>
                     </TableCell>
@@ -450,7 +531,7 @@ export default function Billing() {
             <AlertDialogAction
               onClick={handleCancelSubscription}
               disabled={actionLoading}
-              className="bg-error-500 text-white hover:bg-error-600"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {actionLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Cancel Subscription

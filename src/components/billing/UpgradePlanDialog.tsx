@@ -9,11 +9,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CreditCard, Upload } from "lucide-react";
+import { Loader2, CreditCard, Upload, Check, ArrowLeft, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { InvoiceProofUpload } from "@/components/billing/InvoiceProofUpload";
 import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 
 interface SubscriptionPlan {
   id: string;
@@ -39,6 +40,16 @@ interface UpgradePlanDialogProps {
   onSuccess: () => void;
 }
 
+type Step = "info" | "method" | "payment" | "upload" | "success";
+
+const STEPS: { key: Step; label: string }[] = [
+  { key: "info", label: "Plan" },
+  { key: "method", label: "Method" },
+  { key: "payment", label: "Pay" },
+  { key: "upload", label: "Upload" },
+  { key: "success", label: "Done" },
+];
+
 export function UpgradePlanDialog({
   open,
   onOpenChange,
@@ -47,15 +58,17 @@ export function UpgradePlanDialog({
   onSuccess,
 }: UpgradePlanDialogProps) {
   const { user } = useAuth();
-  const [step, setStep] = useState<"info" | "payment" | "upload">("info");
+  const [step, setStep] = useState<Step>("info");
   const [loading, setLoading] = useState(false);
   const [platformMethods, setPlatformMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setStep("info");
       setCreatedInvoiceId(null);
+      setSelectedMethod(null);
       fetchPlatformMethods();
     }
   }, [open]);
@@ -74,7 +87,7 @@ export function UpgradePlanDialog({
     }
   };
 
-  const handleProceedToPayment = async () => {
+  const handleProceedToMethod = async () => {
     if (!user || !selectedPlan) return;
 
     setLoading(true);
@@ -97,7 +110,7 @@ export function UpgradePlanDialog({
       if (error) throw error;
 
       setCreatedInvoiceId(invoice.id);
-      setStep("payment");
+      setStep("method");
     } catch (error: any) {
       toast.error("Failed to create invoice", { description: error.message });
     } finally {
@@ -105,64 +118,114 @@ export function UpgradePlanDialog({
     }
   };
 
+  const handleSelectMethod = (method: PaymentMethod) => {
+    setSelectedMethod(method);
+    setStep("payment");
+  };
+
   const handleUploadComplete = async (url: string) => {
-    if (!createdInvoiceId) return;
+    if (!createdInvoiceId || !selectedMethod) return;
 
     try {
       const { error } = await supabase
         .from("invoices")
         .update({
           payment_proof_url: url,
+          payment_method: selectedMethod.method_type,
           notes: "Payment proof uploaded, awaiting review",
         })
         .eq("id", createdInvoiceId);
 
       if (error) throw error;
 
-      toast.success("Payment submitted! We'll review and activate your plan shortly.");
-      onOpenChange(false);
-      onSuccess();
+      setStep("success");
     } catch (error: any) {
       toast.error("Failed to submit payment", { description: error.message });
     }
   };
 
+  const handleClose = () => {
+    if (step === "success") {
+      onSuccess();
+    }
+    onOpenChange(false);
+  };
+
+  const getCurrentStepIndex = () => STEPS.findIndex((s) => s.key === step);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
+        {/* Step Indicator */}
+        <div className="flex items-center justify-center gap-1 mb-2">
+          {STEPS.map((s, index) => (
+            <div key={s.key} className="flex items-center">
+              <div
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-colors",
+                  getCurrentStepIndex() > index
+                    ? "bg-primary text-primary-foreground"
+                    : getCurrentStepIndex() === index
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {getCurrentStepIndex() > index ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  index + 1
+                )}
+              </div>
+              {index < STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    "w-6 h-0.5 mx-0.5",
+                    getCurrentStepIndex() > index ? "bg-primary" : "bg-muted"
+                  )}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
         <DialogHeader>
           <DialogTitle>
             {step === "info" && "Upgrade to " + (selectedPlan?.plan_name || "")}
+            {step === "method" && "Select Payment Method"}
             {step === "payment" && "Complete Payment"}
             {step === "upload" && "Upload Payment Proof"}
+            {step === "success" && "Payment Submitted!"}
           </DialogTitle>
           <DialogDescription>
             {step === "info" && "Review your plan details before proceeding."}
-            {step === "payment" && "Send payment using one of the methods below."}
+            {step === "method" && "Choose how you'd like to pay."}
+            {step === "payment" && "Send payment using the details below."}
             {step === "upload" && "Upload a screenshot of your payment confirmation."}
+            {step === "success" && "Your payment is being reviewed."}
           </DialogDescription>
         </DialogHeader>
 
+        {/* Step: Plan Info */}
         {step === "info" && selectedPlan && (
           <div className="space-y-4">
             <div className="bg-muted/30 rounded-lg p-4 space-y-2">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Plan</span>
-                <span className="font-medium">{selectedPlan.plan_name}</span>
+                <span className="text-muted-foreground text-sm">Plan</span>
+                <span className="font-medium text-sm">{selectedPlan.plan_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Price</span>
-                <span className="font-medium">${selectedPlan.price}/month</span>
+                <span className="text-muted-foreground text-sm">Price</span>
+                <span className="font-medium text-sm">${selectedPlan.price}/month</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Projects</span>
-                <span className="font-medium">
+                <span className="text-muted-foreground text-sm">Projects</span>
+                <span className="font-medium text-sm">
                   {selectedPlan.max_projects < 0 ? "Unlimited" : selectedPlan.max_projects}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Subscribers</span>
-                <span className="font-medium">
+                <span className="text-muted-foreground text-sm">Subscribers</span>
+                <span className="font-medium text-sm">
                   {selectedPlan.max_subscribers < 0
                     ? "Unlimited"
                     : selectedPlan.max_subscribers.toLocaleString()}
@@ -172,84 +235,127 @@ export function UpgradePlanDialog({
           </div>
         )}
 
-        {step === "payment" && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center bg-primary/10 rounded-lg p-3">
-              <span>Amount Due</span>
-              <Badge variant="default" className="text-lg">
-                ${selectedPlan?.price.toFixed(2)}
-              </Badge>
-            </div>
-
+        {/* Step: Select Payment Method */}
+        {step === "method" && (
+          <div className="space-y-3">
             {platformMethods.length === 0 ? (
               <p className="text-muted-foreground text-sm text-center py-4">
                 No payment methods available. Please contact support.
               </p>
             ) : (
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Payment Options:</p>
-                {platformMethods.map((method) => (
-                  <div
-                    key={method.id}
-                    className="bg-muted/30 rounded-lg p-3 text-sm space-y-1"
-                  >
-                    <p className="font-medium">{method.method_name}</p>
-                    {Object.entries(method.details).map(([key, value]) =>
-                      value ? (
-                        <p key={key} className="text-muted-foreground">
-                          {key.replace(/_/g, " ")}: <span className="font-mono">{value}</span>
-                        </p>
-                      ) : null
-                    )}
-                    {method.instructions && (
-                      <p className="text-muted-foreground text-xs mt-1">
-                        {method.instructions}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+              platformMethods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => handleSelectMethod(method)}
+                  className="w-full p-3 bg-muted/30 hover:bg-muted/50 rounded-lg text-left transition-colors border border-transparent hover:border-primary/30"
+                >
+                  <p className="font-medium text-sm text-foreground">{method.method_name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {method.method_type.replace(/_/g, " ")}
+                  </p>
+                </button>
+              ))
             )}
+          </div>
+        )}
 
-            <Button
-              className="w-full"
-              onClick={() => setStep("upload")}
-            >
+        {/* Step: Payment Details */}
+        {step === "payment" && selectedMethod && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-primary/10 rounded-lg p-3">
+              <span className="text-sm">Amount Due</span>
+              <Badge variant="default" className="text-lg">
+                ${selectedPlan?.price.toFixed(2)}
+              </Badge>
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-3 text-sm space-y-2">
+              <p className="font-medium text-foreground">{selectedMethod.method_name}</p>
+              {Object.entries(selectedMethod.details).map(([key, value]) =>
+                value ? (
+                  <p key={key} className="text-muted-foreground">
+                    {key.replace(/_/g, " ")}: <span className="font-mono text-foreground">{value}</span>
+                  </p>
+                ) : null
+              )}
+              {selectedMethod.instructions && (
+                <p className="text-muted-foreground text-xs mt-2 pt-2 border-t border-border">
+                  {selectedMethod.instructions}
+                </p>
+              )}
+            </div>
+
+            <Button className="w-full" onClick={() => setStep("upload")}>
               <Upload className="h-4 w-4 mr-2" />
               I've Made the Payment
             </Button>
           </div>
         )}
 
+        {/* Step: Upload Proof */}
         {step === "upload" && createdInvoiceId && (
-          <InvoiceProofUpload
-            invoiceId={createdInvoiceId}
-            currentProofUrl={null}
-            onUploadComplete={handleUploadComplete}
-          />
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Please upload a screenshot of your payment confirmation. Make sure the amount and transaction details are visible.
+            </p>
+            <InvoiceProofUpload
+              invoiceId={createdInvoiceId}
+              currentProofUrl={null}
+              onUploadComplete={handleUploadComplete}
+              showSubmitButton={true}
+            />
+          </div>
+        )}
+
+        {/* Step: Success */}
+        {step === "success" && (
+          <div className="text-center py-4 space-y-4">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle className="h-8 w-8 text-emerald-500" />
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium text-foreground">Payment Submitted Successfully!</p>
+              <p className="text-sm text-muted-foreground">
+                Your payment proof has been submitted for review. Your plan will be activated within 24-48 hours once approved.
+              </p>
+            </div>
+          </div>
         )}
 
         <DialogFooter>
           {step === "info" && (
             <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={handleProceedToPayment} disabled={loading}>
+              <Button onClick={handleProceedToMethod} disabled={loading}>
                 {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 <CreditCard className="h-4 w-4 mr-2" />
                 Proceed to Payment
               </Button>
             </>
           )}
-          {step === "payment" && (
+          {step === "method" && (
             <Button variant="outline" onClick={() => setStep("info")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+          )}
+          {step === "payment" && (
+            <Button variant="outline" onClick={() => setStep("method")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
               Back
             </Button>
           )}
           {step === "upload" && (
             <Button variant="outline" onClick={() => setStep("payment")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
               Back
+            </Button>
+          )}
+          {step === "success" && (
+            <Button onClick={handleClose} className="w-full">
+              View Invoice Status
             </Button>
           )}
         </DialogFooter>

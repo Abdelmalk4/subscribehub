@@ -12,6 +12,7 @@ interface PlanCardProps {
   isCurrentPlan?: boolean;
   onSelectPlan?: () => void;
   disabled?: boolean;
+  billingCycle?: "monthly" | "yearly";
 }
 
 const iconColors = {
@@ -23,15 +24,23 @@ const iconColors = {
 export function PlanCard({
   planName,
   price,
-  period = "/mth",
+  period,
   features,
   iconColor = "pink",
   isCurrentPlan = false,
   onSelectPlan,
   disabled = false,
+  billingCycle = "monthly",
 }: PlanCardProps) {
+  // Calculate display price based on billing cycle
+  const displayPrice = billingCycle === "yearly" 
+    ? Math.round(price * 12 * 0.8) // 20% discount for yearly
+    : price;
+  
+  const displayPeriod = period || (billingCycle === "yearly" ? "/yr" : "/mth");
+
   return (
-    <div className="flex flex-col h-full p-3 border border-gray-200 rounded-lg bg-white">
+    <div className="flex flex-col h-full p-3 border border-border rounded-lg bg-card">
       {/* Header with icon and price */}
       <div className="flex items-start justify-between mb-2.5">
         <div className="flex items-center gap-2">
@@ -42,18 +51,23 @@ export function PlanCard({
               <path d="M9 21V9" />
             </svg>
           </div>
-          <span className="font-medium text-gray-900 text-sm">{planName}</span>
+          <span className="font-medium text-foreground text-sm">{planName}</span>
         </div>
-        <span className="text-gray-900 font-medium text-sm">
-          ${price}{period}
-        </span>
+        <div className="text-right">
+          <span className="text-foreground font-medium text-sm">
+            ${displayPrice}{displayPeriod}
+          </span>
+          {billingCycle === "yearly" && (
+            <p className="text-[10px] text-emerald-600 font-medium">Save 20%</p>
+          )}
+        </div>
       </div>
 
       {/* Features */}
       <ul className="space-y-1.5 flex-1 mb-3">
         {features.slice(0, 5).map((feature, index) => (
-          <li key={index} className="flex items-start gap-1.5 text-xs text-gray-600">
-            <Check className="h-3 w-3 text-gray-400 flex-shrink-0 mt-0.5" />
+          <li key={index} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Check className="h-3 w-3 text-muted-foreground/60 flex-shrink-0 mt-0.5" />
             <span>{feature}</span>
           </li>
         ))}

@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Upload, X, Image as ImageIcon, Loader2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,16 +11,20 @@ interface InvoiceProofUploadProps {
   invoiceId: string;
   currentProofUrl?: string | null;
   onUploadComplete: (url: string) => void;
+  showSubmitButton?: boolean;
 }
 
 export function InvoiceProofUpload({
   invoiceId,
   currentProofUrl,
   onUploadComplete,
+  showSubmitButton = true,
 }: InvoiceProofUploadProps) {
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,8 +64,9 @@ export function InvoiceProofUpload({
 
       if (signedError) throw signedError;
 
-      onUploadComplete(signedData.signedUrl);
-      toast.success("Payment proof uploaded successfully");
+      // Store the URL but don't call onUploadComplete yet - wait for explicit submit
+      setUploadedUrl(signedData.signedUrl);
+      toast.success("Image uploaded! Click 'Submit Payment Proof' to confirm.");
     } catch (error) {
       console.error("Upload error:", error);
       toast.error("Failed to upload payment proof");
@@ -71,14 +76,25 @@ export function InvoiceProofUpload({
     }
   };
 
+  const handleSubmit = () => {
+    if (!uploadedUrl) {
+      toast.error("Please upload an image first");
+      return;
+    }
+    setIsSubmitting(true);
+  };
+
+
   const clearPreview = () => {
     setPreviewUrl(null);
+    setUploadedUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
   const displayUrl = previewUrl || currentProofUrl;
+  const hasNewUpload = !!uploadedUrl && !isSubmitting;
 
   return (
     <div className="space-y-4">
@@ -91,12 +107,12 @@ export function InvoiceProofUpload({
             alt="Payment proof"
             className="w-full max-h-64 object-contain bg-muted/30"
           />
-          {!isUploading && (
+          {!isUploading && !isSubmitting && (
             <div className="absolute top-2 right-2 flex gap-2">
               <Button
                 variant="secondary"
                 size="icon"
-                className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+                className="h-8 w-8 bg-background/80"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="h-4 w-4" />
@@ -114,7 +130,7 @@ export function InvoiceProofUpload({
             </div>
           )}
           {isUploading && (
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
               <div className="flex items-center gap-2 text-primary">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span>Uploading...</span>
@@ -149,8 +165,29 @@ export function InvoiceProofUpload({
         accept="image/jpeg,image/png,image/webp,image/gif"
         className="hidden"
         onChange={handleFileSelect}
-        disabled={isUploading}
+        disabled={isUploading || isSubmitting}
       />
+
+      {/* Explicit Submit Button */}
+      {showSubmitButton && hasNewUpload && (
+        <Button
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="w-full"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Submitting...
+            </>
+          ) : (
+            <>
+              <Check className="h-4 w-4 mr-2" />
+              Submit Payment Proof
+            </>
+          )}
+        </Button>
+      )}
     </div>
   );
 }
