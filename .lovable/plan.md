@@ -1,267 +1,199 @@
 
-# Implementation Plan: Onboarding Wizard, Bot Health Indicators, and Quick-Approve Links
+
+# Implementation Plan: Real-time Bot Health + First-Time User Redirect
 
 ## Overview
 
-This plan addresses three key features to transform SubscribeHub from a functional but confusing tool into a seamless, professional subscription management platform:
-
-1. **Onboarding Wizard** - Guide first-time users through project creation
-2. **Bot Health Indicators** - Show webhook status on Projects page
-3. **Quick-Approve Links** - Enable one-click payment approval from Telegram
-
----
-
-## Feature 1: Onboarding Wizard
-
-### Purpose
-New users currently land on an empty dashboard with no guidance. This wizard will guide them through creating their first project, connecting their bot, and setting up a plan - all in one seamless flow.
-
-### Implementation Approach
-
-**New Components:**
-- `src/components/onboarding/OnboardingWizard.tsx` - Full-screen wizard with 4 steps
-- `src/components/onboarding/steps/WelcomeStep.tsx` - Introduction with value proposition
-- `src/components/onboarding/steps/ProjectStep.tsx` - Name and basic info
-- `src/components/onboarding/steps/BotStep.tsx` - Bot token and channel connection
-- `src/components/onboarding/steps/PlanStep.tsx` - Create first subscription plan
-- `src/components/onboarding/steps/SuccessStep.tsx` - Celebration with next actions
-
-**Modified Files:**
-- `src/pages/Dashboard.tsx` - Detect first-time users (0 projects) and show wizard
-- `src/App.tsx` - Add `/onboarding` route for direct access
-
-**User Flow:**
-```text
-Step 1: Welcome
-   "Turn your Telegram channel into a revenue machine"
-   [Get Started]
-
-Step 2: Project Info
-   - Project name
-   - Support contact (optional)
-   [Continue]
-
-Step 3: Connect Bot
-   - Bot token (with validation)
-   - Channel ID
-   - Real-time validation feedback
-   [Validate & Continue]
-
-Step 4: First Plan
-   - Plan name (e.g., "Monthly")
-   - Price
-   - Duration (preset buttons: 7d, 30d, 90d, 365d)
-   [Create Plan]
-
-Step 5: Success!
-   - Celebration animation
-   - Shareable bot link
-   - Quick actions: "Open Bot", "Add More Plans", "Go to Dashboard"
-```
-
-**Technical Details:**
-- Store wizard progress in localStorage to resume if interrupted
-- Use existing `validate-project-setup` edge function for bot validation
-- Automatically setup webhook via `setup-telegram-webhook` edge function
-- Create project and plan in a single transaction flow
+This plan implements three enhancements:
+1. **Real-time Supabase subscription** for bot health indicators on the Projects page
+2. **Automatic redirect** for first-time users (0 projects) to the onboarding wizard
+3. **Verification** that the onboarding wizard works correctly (already tested via screenshot)
 
 ---
 
-## Feature 2: Bot Health Indicators
+## Part 1: Real-time Bot Health Indicators
 
 ### Purpose
-Project owners can't tell if their bot is working correctly. This feature adds visual indicators showing webhook status, last activity, and any errors.
+Currently, bot health status is only fetched once when the Projects page loads. When a webhook updates `last_webhook_at`, the UI doesn't reflect this until a manual refresh. Real-time subscriptions will update the health indicators live.
 
-### Implementation Approach
+### Database Requirements
+Enable Realtime on the `projects` table for the relevant columns.
 
-**Database Changes:**
-Add columns to track bot health (migration):
+**Migration SQL:**
 ```sql
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS last_webhook_at TIMESTAMP WITH TIME ZONE;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS webhook_status TEXT DEFAULT 'unknown';
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS webhook_error TEXT;
+-- Enable realtime for projects table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
 ```
 
-**New Edge Function:**
-- `supabase/functions/check-bot-health/index.ts` - Validates bot token and webhook configuration
+### Frontend Changes
 
-**Modified Files:**
-- `src/pages/Projects.tsx` - Add health indicator badge to each project card
-- `supabase/functions/telegram-bot-handler/index.ts` - Update `last_webhook_at` on each webhook call
+**File: `src/pages/Projects.tsx`**
 
-**UI Design:**
-```text
-Project Card Header:
-┌─────────────────────────────────────────┐
-│ [Bot Icon] My Premium Channel           │
-│ @mybot                                  │
-│ ┌──────────┐ ┌──────────┐              │
-│ │ ✅ Active │ │ 🟢 Bot OK │              │
-│ └──────────┘ └──────────┘              │
-└─────────────────────────────────────────┘
+Add a Supabase real-time subscription that listens for changes to the `projects` table and updates the local state when `last_webhook_at`, `webhook_status`, or `webhook_error` columns change.
 
-Health States:
-- 🟢 "Healthy" - Last activity < 24h, webhook working
-- 🟡 "Idle" - No activity in 24-72h
-- 🔴 "Error" - Webhook failed or no activity > 72h
-- ⚪ "Unknown" - Never connected
-```
-
-**Health Check Logic:**
-- "Healthy": `last_webhook_at` within 24 hours OR webhook validation passes
-- "Idle": `last_webhook_at` between 24-72 hours ago
-- "Error": `last_webhook_at` > 72 hours OR webhook validation fails
-- "Unknown": `last_webhook_at` is null
-
-**Implementation in `telegram-bot-handler`:**
-Update project on each successful webhook:
 ```typescript
-// After processing any update successfully
-await supabase
-  .from("projects")
-  .update({ 
-    last_webhook_at: new Date().toISOString(),
-    webhook_status: 'healthy',
-    webhook_error: null 
-  })
-  .eq("id", projectId);
+// Add real-time subscription in useEffect
+useEffect(() => {
+  if (!user) return;
+
+  // Subscribe to project updates
+  const channel = supabase
+    .channel('projects-health')
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'projects',
+        filter: `user_id=eq.${user.id}`,
+      },
+      (payload) => {
+        // Update the project in local state
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.id === payload.new.id
+              ? {
+                  ...p,
+                  last_webhook_at: payload.new.last_webhook_at,
+                  webhook_status: payload.new.webhook_status,
+                  webhook_error: payload.new.webhook_error,
+                }
+              : p
+          )
+        );
+      }
+    )
+    .subscribe();
+
+  // Cleanup on unmount
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, [user]);
+```
+
+### Technical Flow
+```text
+1. User visits Projects page
+2. Initial fetch loads all projects with health data
+3. Supabase real-time channel subscribes to UPDATE events
+4. When telegram-bot-handler updates last_webhook_at, Postgres emits change
+5. Real-time subscription receives payload
+6. React state updates, BotHealthBadge re-renders with new status
 ```
 
 ---
 
-## Feature 3: Quick-Approve Links in Telegram
+## Part 2: First-Time User Redirect to Onboarding
 
 ### Purpose
-When a user submits payment proof, the admin currently receives a notification but must open the dashboard to approve. This feature adds a direct "Approve" button in the Telegram notification.
+New users with 0 projects currently see an empty state on the Dashboard with a button to create a project. Instead, they should be automatically redirected to the onboarding wizard for a smoother experience.
 
-### Implementation Approach
+### Implementation
 
-**New Edge Function:**
-- `supabase/functions/quick-approve/index.ts` - Handles one-click approval from Telegram callback
+**File: `src/pages/Dashboard.tsx`**
 
-**Modified Files:**
-- `supabase/functions/telegram-bot-handler/index.ts` - Update `notifyAdminOfPendingPayment` to include approve/reject buttons
-- Add callback handler for `quick_approve:` and `quick_reject:` actions
+Change the current empty state behavior to redirect first-time users to `/onboarding` instead of showing a static card.
 
-**Admin Notification Redesign:**
-```text
-Current:
-📬 New Payment Pending
-
-User: @john_doe
-Plan: Monthly
-Amount: $29
-
-Please review in the dashboard.
-
-New:
-📬 New Payment Pending
-
-👤 User: @john_doe
-📦 Plan: Monthly ($29/30 days)
-📸 Payment proof received
-
-[✅ Approve] [❌ Reject] [👁 View Proof]
+**Current behavior (lines 198-216):**
+```typescript
+// Empty state for new users
+if (!hasProjects) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+      ...
+      <Link to="/projects">
+        <Button size="lg" className="gap-2">
+          <Plus className="h-4 w-4" />
+          Create Your First Project
+        </Button>
+      </Link>
+    </div>
+  );
+}
 ```
 
-**Technical Flow:**
-1. User uploads payment proof
-2. `notifyAdminOfPendingPayment` sends enhanced notification with callback buttons
-3. Admin clicks "Approve"
-4. Telegram sends callback to bot handler
-5. `handleQuickApprove` function:
-   - Validates admin ownership of project
-   - Updates subscriber status to "active"
-   - Calculates expiry date based on plan duration
-   - Generates invite link
-   - Sends confirmation to user
-   - Sends confirmation to admin
+**New behavior:**
+```typescript
+import { useNavigate } from "react-router-dom";
 
-**Callback Data Format:**
-```text
-quick_approve:{subscriber_id}
-quick_reject:{subscriber_id}
-view_proof:{subscriber_id}
+// Inside component:
+const navigate = useNavigate();
+
+// After loading completes, redirect first-time users
+useEffect(() => {
+  if (!isLoading && !hasProjects && user) {
+    navigate("/onboarding", { replace: true });
+  }
+}, [isLoading, hasProjects, user, navigate]);
+
+// Keep empty state as fallback (in case navigation fails or for edge cases)
+if (!hasProjects) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <p className="text-sm text-muted-foreground mt-2">Redirecting to setup...</p>
+    </div>
+  );
+}
 ```
 
-**Security Considerations:**
-- Verify the callback is from the project's admin (compare `callback_query.from.id` with `project.admin_telegram_id`)
-- Rate limit approval actions to prevent abuse
-- Log all approval actions to audit_logs table
-
-**Rejection Flow:**
-When admin clicks "Reject", send follow-up message asking for reason:
-```text
-"Please reply with the rejection reason:"
-[Cancel]
-```
-Then capture the next text message as the rejection reason.
+### Edge Cases Handled
+- **Returning users after deleting all projects:** They'll be redirected to onboarding
+- **Onboarding skip:** Users who skip the wizard and go to Projects can still create projects manually
+- **Browser back button:** Using `replace: true` prevents back-button issues
 
 ---
 
-## Files to Create
+## Part 3: Onboarding Wizard Verification
 
-| File | Purpose |
-|------|---------|
-| `src/components/onboarding/OnboardingWizard.tsx` | Main wizard container with step navigation |
-| `src/components/onboarding/steps/WelcomeStep.tsx` | Introduction screen |
-| `src/components/onboarding/steps/ProjectStep.tsx` | Project name input |
-| `src/components/onboarding/steps/BotStep.tsx` | Bot token and channel setup |
-| `src/components/onboarding/steps/PlanStep.tsx` | First plan creation |
-| `src/components/onboarding/steps/SuccessStep.tsx` | Completion celebration |
-| `supabase/functions/check-bot-health/index.ts` | Bot and webhook health validation |
+### Current Status
+The onboarding wizard has been tested via screenshot at `/onboarding`:
+- Welcome screen displays correctly
+- Progress bar and step indicators work
+- UI follows the design system
+
+### Flow Verification (Manual Testing Steps)
+1. Navigate to `/onboarding`
+2. Step 1 (Welcome): Click "Get Started"
+3. Step 2 (Project): Enter project name, click "Continue"
+4. Step 3 (Bot): Enter bot token and channel ID, click "Validate Connection"
+5. Step 4 (Plan): Set plan details, click "Create Plan"
+6. Step 5 (Success): Verify confetti and shareable link
+
+### Known Limitations
+- Real bot token required for Step 3 validation (cannot be simulated)
+- Webhook setup may fail silently (non-blocking, logged to console)
+
+---
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/Dashboard.tsx` | Add detection for first-time users, show onboarding prompt |
-| `src/pages/Projects.tsx` | Add bot health indicator badges to project cards |
-| `src/App.tsx` | Add `/onboarding` route |
-| `supabase/functions/telegram-bot-handler/index.ts` | Update `last_webhook_at`, add quick-approve handlers, enhance admin notifications |
-| Database migration | Add health tracking columns to projects table |
+| `src/pages/Projects.tsx` | Add real-time subscription for project health updates |
+| `src/pages/Dashboard.tsx` | Add redirect to `/onboarding` for first-time users |
 
-## Database Migration
+## Database Changes
 
-```sql
--- Add bot health tracking columns
-ALTER TABLE projects 
-ADD COLUMN IF NOT EXISTS last_webhook_at TIMESTAMP WITH TIME ZONE,
-ADD COLUMN IF NOT EXISTS webhook_status TEXT DEFAULT 'unknown',
-ADD COLUMN IF NOT EXISTS webhook_error TEXT;
-
--- Index for health queries
-CREATE INDEX IF NOT EXISTS idx_projects_webhook_status ON projects(webhook_status);
-```
+| Change | Purpose |
+|--------|---------|
+| Enable Realtime on `projects` table | Allow real-time subscriptions to receive updates |
 
 ---
 
 ## Implementation Order
 
-1. **Phase A: Database Setup** (Day 1)
-   - Create migration for health columns
-   - Deploy database changes
-
-2. **Phase B: Bot Health Indicators** (Day 1-2)
-   - Update `telegram-bot-handler` to track `last_webhook_at`
-   - Create `check-bot-health` edge function
-   - Add health badges to `Projects.tsx`
-
-3. **Phase C: Quick-Approve Links** (Day 2-3)
-   - Update `notifyAdminOfPendingPayment` with buttons
-   - Add callback handlers for approve/reject
-   - Add audit logging for approvals
-
-4. **Phase D: Onboarding Wizard** (Day 3-5)
-   - Create wizard components
-   - Integrate with Dashboard
-   - Add route and navigation
+1. **Database Migration** - Enable Realtime on projects table
+2. **Projects.tsx** - Add real-time subscription hook
+3. **Dashboard.tsx** - Add first-time user redirect
+4. **Test** - Verify both features work correctly
 
 ---
 
 ## Success Criteria
 
-- New users see guided onboarding flow on first login
-- Project cards show accurate bot health status
-- Admins can approve payments directly from Telegram in under 10 seconds
-- All approval actions are logged for audit trail
+- Bot health badges update automatically when webhooks are received (no page refresh needed)
+- New users are automatically redirected to the onboarding wizard
+- The onboarding wizard creates projects successfully and shows the success screen
+
