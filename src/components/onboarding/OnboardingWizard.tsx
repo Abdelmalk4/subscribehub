@@ -198,21 +198,38 @@ export function OnboardingWizard() {
         </div>
       )}
 
-      {/* Step indicator */}
-      {currentStep > 0 && currentStep < 4 && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40">
-          <div className="flex items-center gap-2 bg-card border rounded-full px-3 py-1.5 shadow-sm">
-            {[1, 2, 3, 4].map((step) => (
-              <div
-                key={step}
-                className={`h-2 w-2 rounded-full transition-colors ${
-                  step <= currentStep + 1 ? "bg-primary" : "bg-muted"
-                }`}
-              />
-            ))}
-            <span className="text-xs text-muted-foreground ml-1">
-              Step {currentStep + 1} of 4
-            </span>
+      {/* Header with step indicator and skip button */}
+      {currentStep < 4 && (
+        <div className="fixed top-4 left-0 right-0 z-40 px-4">
+          <div className="max-w-md mx-auto flex items-center justify-between">
+            {/* Step indicator - only show after welcome */}
+            {currentStep > 0 ? (
+              <div className="flex items-center gap-2 bg-card border rounded-full px-3 py-1.5 shadow-sm">
+                {[1, 2, 3, 4].map((step) => (
+                  <div
+                    key={step}
+                    className={`h-2 w-2 rounded-full transition-colors ${
+                      step <= currentStep + 1 ? "bg-primary" : "bg-muted"
+                    }`}
+                  />
+                ))}
+                <span className="text-xs text-muted-foreground ml-1">
+                  Step {currentStep + 1} of 4
+                </span>
+              </div>
+            ) : (
+              <div />
+            )}
+            
+            {/* Skip button - always visible except on welcome (which has its own) */}
+            {currentStep > 0 && (
+              <button
+                onClick={handleSkip}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors bg-card border rounded-full px-3 py-1.5 shadow-sm"
+              >
+                Skip setup
+              </button>
+            )}
           </div>
         </div>
       )}
