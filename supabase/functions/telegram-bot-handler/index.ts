@@ -1423,7 +1423,8 @@ async function handlePhotoMessage(
     project.bot_token,
     chatId,
     "✅ <b>Payment proof received!</b>\n\n" +
-    "Your payment is now pending approval. You'll receive a notification once it's verified.\n\n" +
+    "Your payment is being reviewed. You'll receive a notification as soon as it's approved.\n\n" +
+    "⏱️ <b>Usually approved within 5-10 minutes during business hours.</b>\n\n" +
     "Thank you for your patience! 🙏"
   );
 }
@@ -1473,9 +1474,10 @@ async function handleStart(
         await sendTelegramMessage(
           project.bot_token,
           chatId,
-          "⏳ <b>Your payment is pending approval.</b>\n\n" +
-          "Please wait while we verify your payment. You'll receive a notification once it's approved.\n\n" +
-          "This usually takes a few hours during business hours."
+          "⏳ <b>Your payment is being reviewed.</b>\n\n" +
+          "You'll receive a notification as soon as it's approved.\n\n" +
+          "⏱️ <b>Usually approved within 5-10 minutes.</b>\n\n" +
+          "No action needed - just wait for confirmation!"
         );
         return;
         
