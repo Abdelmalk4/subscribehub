@@ -24,6 +24,7 @@ import Subscribers from "@/pages/Subscribers";
 import Analytics from "@/pages/Analytics";
 import Billing from "@/pages/Billing";
 import Settings from "@/pages/Settings";
+import Onboarding from "@/pages/Onboarding";
 import NotFound from "@/pages/NotFound";
 
 // Admin Pages
@@ -42,6 +43,9 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
+        
+        {/* Onboarding - Full screen wizard */}
+        <Route path="/onboarding" element={<Onboarding />} />
         
         {/* Auth Routes */}
         <Route element={<AuthLayout />}>

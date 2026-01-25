@@ -546,6 +546,7 @@ export type Database = {
           channel_id: string
           created_at: string | null
           id: string
+          last_webhook_at: string | null
           manual_payment_config: Json | null
           project_name: string
           status: string | null
@@ -553,6 +554,8 @@ export type Database = {
           support_contact: string | null
           updated_at: string | null
           user_id: string
+          webhook_error: string | null
+          webhook_status: string | null
         }
         Insert: {
           admin_telegram_id?: number | null
@@ -561,6 +564,7 @@ export type Database = {
           channel_id: string
           created_at?: string | null
           id?: string
+          last_webhook_at?: string | null
           manual_payment_config?: Json | null
           project_name: string
           status?: string | null
@@ -568,6 +572,8 @@ export type Database = {
           support_contact?: string | null
           updated_at?: string | null
           user_id: string
+          webhook_error?: string | null
+          webhook_status?: string | null
         }
         Update: {
           admin_telegram_id?: number | null
@@ -576,6 +582,7 @@ export type Database = {
           channel_id?: string
           created_at?: string | null
           id?: string
+          last_webhook_at?: string | null
           manual_payment_config?: Json | null
           project_name?: string
           status?: string | null
@@ -583,6 +590,8 @@ export type Database = {
           support_contact?: string | null
           updated_at?: string | null
           user_id?: string
+          webhook_error?: string | null
+          webhook_status?: string | null
         }
         Relationships: []
       }

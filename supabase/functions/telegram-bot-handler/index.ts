@@ -701,21 +701,64 @@ async function notifyAdminOfPendingPayment(
       reference_id: subscriber.id,
     });
     
-    // If admin has Telegram ID, notify them directly
+    // If admin has Telegram ID, notify them directly with quick-approve buttons
     if (project.admin_telegram_id) {
+      const userDisplay = subscriber.username 
+        ? `@${sanitizeForHTML(subscriber.username)}` 
+        : sanitizeForHTML(subscriber.first_name) || "Unknown";
+      
+      const message = 
+        `📬 <b>New Payment Pending</b>\n\n` +
+        `👤 User: ${userDisplay}\n` +
+        `📦 Plan: ${sanitizeForHTML(plan.plan_name)} (${formatCurrency(plan.price)}/${plan.duration_days} days)\n` +
+        `📸 Payment proof received\n\n` +
+        `⏱️ Tap a button below to respond instantly:`;
+      
+      // Quick action buttons
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: "✅ Approve", callback_data: `quick_approve:${subscriber.id}` },
+            { text: "❌ Reject", callback_data: `quick_reject:${subscriber.id}` },
+          ],
+          [
+            { text: "👁 View Proof", callback_data: `view_proof:${subscriber.id}` },
+          ],
+        ],
+      };
+      
       await sendTelegramMessage(
         project.bot_token,
         project.admin_telegram_id as unknown as number,
-        `📬 <b>New Payment Pending</b>\n\n` +
-        `User: @${sanitizeForHTML(subscriber.username) || sanitizeForHTML(subscriber.first_name)}\n` +
-        `Plan: ${sanitizeForHTML(plan.plan_name)}\n` +
-        `Amount: ${formatCurrency(plan.price)}\n\n` +
-        `Please review in the dashboard.`
+        message,
+        replyMarkup
       );
     }
   } catch (err) {
     console.error("[NOTIFICATION] Failed to notify admin:", err);
     // Non-critical, don't throw
+  }
+}
+
+// ============= BOT HEALTH TRACKING =============
+
+async function updateBotHealth(
+  supabase: any,
+  projectId: string,
+  status: "healthy" | "error" = "healthy",
+  error?: string
+): Promise<void> {
+  try {
+    await supabase
+      .from("projects")
+      .update({
+        last_webhook_at: new Date().toISOString(),
+        webhook_status: status,
+        webhook_error: error || null,
+      })
+      .eq("id", projectId);
+  } catch (err) {
+    console.error("[HEALTH] Failed to update bot health:", err);
   }
 }
 
@@ -952,6 +995,9 @@ serve(async (req) => {
     // Record successful processing
     await recordWebhookEvent(supabase, update.update_id, eventType, { status: "processed", project_id: projectId });
 
+    // Update bot health status
+    await updateBotHealth(supabase, projectId, "healthy");
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -1050,6 +1096,30 @@ async function handleCallbackQuery(
     // Edge case: User cancels operation
     await sendTelegramMessage(project.bot_token, chatId, "❌ Operation cancelled. Use /start to begin again.");
     await editMessageReplyMarkup(project.bot_token, chatId, messageId);
+  } else if (callbackData.startsWith("quick_approve:")) {
+    // Admin quick-approve from Telegram notification
+    const subscriberId = callbackData.split(":")[1];
+    if (!isValidUUID(subscriberId)) {
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Invalid subscriber ID.");
+      return;
+    }
+    await handleQuickApprove(supabase, project, subscriberId, userId, chatId, messageId, requestId);
+  } else if (callbackData.startsWith("quick_reject:")) {
+    // Admin quick-reject from Telegram notification
+    const subscriberId = callbackData.split(":")[1];
+    if (!isValidUUID(subscriberId)) {
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Invalid subscriber ID.");
+      return;
+    }
+    await handleQuickReject(supabase, project, subscriberId, userId, chatId, messageId, requestId);
+  } else if (callbackData.startsWith("view_proof:")) {
+    // Admin view payment proof
+    const subscriberId = callbackData.split(":")[1];
+    if (!isValidUUID(subscriberId)) {
+      await sendTelegramMessage(project.bot_token, chatId, "❌ Invalid subscriber ID.");
+      return;
+    }
+    await handleViewProof(supabase, project, subscriberId, userId, chatId, requestId);
   } else {
     // Edge case: Unknown callback action
     console.warn(`[${requestId}] Unknown callback action: ${callbackData}`);
@@ -2224,4 +2294,198 @@ async function handleHelp(project: Project, chatId: number) {
   }
 
   await sendTelegramMessage(project.bot_token, chatId, message);
+}
+
+// ============= QUICK-APPROVE HANDLERS =============
+
+async function handleQuickApprove(
+  supabase: any,
+  project: Project,
+  subscriberId: string,
+  adminUserId: number,
+  chatId: number,
+  messageId: number,
+  requestId: string
+) {
+  console.log(`[${requestId}] Quick approve for subscriber ${subscriberId} by admin ${adminUserId}`);
+
+  // Verify admin ownership
+  if (project.admin_telegram_id !== adminUserId) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ You are not authorized to approve this payment.");
+    return;
+  }
+
+  // Get subscriber with plan
+  const { data: subscriber, error } = await supabase
+    .from("subscribers")
+    .select("*, plans(*)")
+    .eq("id", subscriberId)
+    .eq("project_id", project.id)
+    .single();
+
+  if (error || !subscriber) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Subscriber not found.");
+    return;
+  }
+
+  if (subscriber.status !== "pending_approval") {
+    await sendTelegramMessage(project.bot_token, chatId, `ℹ️ Subscriber is already ${subscriber.status}.`);
+    return;
+  }
+
+  const plan = subscriber.plans as Plan;
+  const now = new Date();
+  const expiryDate = new Date(now.getTime() + plan.duration_days * 24 * 60 * 60 * 1000);
+
+  // Update subscriber
+  const { error: updateError } = await supabase
+    .from("subscribers")
+    .update({
+      status: "active",
+      start_date: now.toISOString(),
+      expiry_date: expiryDate.toISOString(),
+      approved_by_admin_id: null, // Can't reference auth.uid() from bot context
+      updated_at: now.toISOString(),
+    })
+    .eq("id", subscriberId);
+
+  if (updateError) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Failed to approve. Please try in dashboard.");
+    return;
+  }
+
+  // Generate invite link
+  let inviteLink = "";
+  try {
+    const inviteResponse = await fetch(
+      `https://api.telegram.org/bot${project.bot_token}/createChatInviteLink`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: project.channel_id,
+          member_limit: 1,
+          expire_date: Math.floor(Date.now() / 1000) + 86400, // 24 hours
+        }),
+      }
+    );
+    const inviteData = await inviteResponse.json();
+    if (inviteData.ok) {
+      inviteLink = inviteData.result.invite_link;
+      await supabase.from("subscribers").update({ invite_link: inviteLink }).eq("id", subscriberId);
+    }
+  } catch (err) {
+    console.error("[QUICK_APPROVE] Failed to create invite link:", err);
+  }
+
+  // Notify user
+  await sendTelegramMessage(
+    project.bot_token,
+    subscriber.telegram_user_id,
+    `🎉 <b>Payment Approved!</b>\n\n` +
+    `Your subscription to ${sanitizeForHTML(plan.plan_name)} is now active.\n\n` +
+    `📅 Valid until: ${formatDate(expiryDate.toISOString())}\n\n` +
+    (inviteLink ? `🔗 <a href="${inviteLink}">Click here to join the channel</a>` : "You can now access the channel.")
+  );
+
+  // Update admin message
+  await editMessageReplyMarkup(project.bot_token, chatId, messageId);
+  await sendTelegramMessage(project.bot_token, chatId, `✅ Approved! User has been notified and given access.`);
+
+  // Log audit
+  await supabase.rpc("log_audit_event", {
+    p_user_id: null,
+    p_action: "quick_approve",
+    p_resource_type: "subscriber",
+    p_resource_id: subscriberId,
+    p_changes: { method: "telegram", admin_telegram_id: adminUserId },
+  });
+}
+
+async function handleQuickReject(
+  supabase: any,
+  project: Project,
+  subscriberId: string,
+  adminUserId: number,
+  chatId: number,
+  messageId: number,
+  requestId: string
+) {
+  console.log(`[${requestId}] Quick reject for subscriber ${subscriberId} by admin ${adminUserId}`);
+
+  if (project.admin_telegram_id !== adminUserId) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ You are not authorized to reject this payment.");
+    return;
+  }
+
+  const { data: subscriber, error } = await supabase
+    .from("subscribers")
+    .select("*, plans(*)")
+    .eq("id", subscriberId)
+    .eq("project_id", project.id)
+    .single();
+
+  if (error || !subscriber) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Subscriber not found.");
+    return;
+  }
+
+  if (subscriber.status !== "pending_approval") {
+    await sendTelegramMessage(project.bot_token, chatId, `ℹ️ Subscriber is already ${subscriber.status}.`);
+    return;
+  }
+
+  // Update subscriber to rejected
+  await supabase
+    .from("subscribers")
+    .update({
+      status: "rejected",
+      rejection_reason: "Payment rejected by admin",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", subscriberId);
+
+  // Notify user
+  await sendTelegramMessage(
+    project.bot_token,
+    subscriber.telegram_user_id,
+    `❌ <b>Payment Rejected</b>\n\n` +
+    `Your payment for ${sanitizeForHTML(subscriber.plans?.plan_name || "subscription")} was not approved.\n\n` +
+    `Please contact support or use /start to try again.`
+  );
+
+  await editMessageReplyMarkup(project.bot_token, chatId, messageId);
+  await sendTelegramMessage(project.bot_token, chatId, `❌ Rejected. User has been notified.`);
+}
+
+async function handleViewProof(
+  supabase: any,
+  project: Project,
+  subscriberId: string,
+  adminUserId: number,
+  chatId: number,
+  requestId: string
+) {
+  if (project.admin_telegram_id !== adminUserId) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ Unauthorized.");
+    return;
+  }
+
+  const { data: subscriber } = await supabase
+    .from("subscribers")
+    .select("payment_proof_url, username, first_name")
+    .eq("id", subscriberId)
+    .single();
+
+  if (!subscriber?.payment_proof_url) {
+    await sendTelegramMessage(project.bot_token, chatId, "❌ No payment proof available.");
+    return;
+  }
+
+  await sendTelegramMessage(
+    project.bot_token,
+    chatId,
+    `📸 <b>Payment Proof</b>\n\nUser: ${sanitizeForHTML(subscriber.username || subscriber.first_name)}\n\n` +
+    `<a href="${subscriber.payment_proof_url}">View Payment Proof</a>`
+  );
 }
