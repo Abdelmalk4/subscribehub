@@ -28,14 +28,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   Search,
-  Filter,
   Download,
   Plus,
   MoreHorizontal,
@@ -48,11 +41,9 @@ import {
   ChevronRight,
   Users,
   UserCheck,
-  UserX,
-  AlertCircle,
-  RefreshCw,
+  AlertTriangle,
   CalendarPlus,
-  Hash,
+  ImageIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -80,9 +71,6 @@ interface Subscriber {
   suspended_at?: string | null;
   suspended_by?: string | null;
   channel_joined?: boolean | null;
-  channel_joined_at?: string | null;
-  last_membership_check?: string | null;
-  channel_membership_status?: string | null;
   projects?: { project_name: string } | null;
   plans?: { plan_name: string; price: number; currency: string | null; duration_days: number } | null;
 }
@@ -94,20 +82,10 @@ interface Project {
 
 interface Stats {
   active: number;
-  pending_approval: number;
-  awaiting_proof: number;
-  expired: number;
+  needsAction: number;
+  expiringSoon: number;
+  total: number;
 }
-
-const statusConfig: Record<string, { label: string; variant: "success" | "warning" | "pending" | "muted" | "destructive" }> = {
-  active: { label: "Active", variant: "success" },
-  pending_approval: { label: "Pending Approval", variant: "pending" },
-  pending_payment: { label: "Pending Payment", variant: "warning" },
-  awaiting_proof: { label: "Awaiting Proof", variant: "pending" },
-  expired: { label: "Expired", variant: "muted" },
-  rejected: { label: "Rejected", variant: "destructive" },
-  suspended: { label: "Suspended", variant: "destructive" },
-};
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -115,10 +93,9 @@ export default function Subscribers() {
   const { user } = useAuth();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [stats, setStats] = useState<Stats>({ active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 });
+  const [stats, setStats] = useState<Stats>({ active: 0, needsAction: 0, expiringSoon: 0, total: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
@@ -128,9 +105,8 @@ export default function Subscribers() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
-  const [activeTab, setActiveTab] = useState("all");
-  const [isCheckingMembership, setIsCheckingMembership] = useState<Set<string>>(new Set());
-  const [quickExtendDays, setQuickExtendDays] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState("needs-action");
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const fetchProjects = async () => {
     const { data } = await supabase
@@ -141,17 +117,39 @@ export default function Subscribers() {
   };
 
   const fetchStats = async () => {
-    const statuses = ["active", "pending_approval", "awaiting_proof", "expired"];
-    const newStats: Stats = { active: 0, pending_approval: 0, awaiting_proof: 0, expired: 0 };
+    // Needs Action: pending_approval + awaiting_proof
+    const { count: pendingCount } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true })
+      .in("status", ["pending_approval", "awaiting_proof"]);
 
-    for (const status of statuses) {
-      const { count } = await supabase
-        .from("subscribers")
-        .select("*", { count: "exact", head: true })
-        .eq("status", status as any);
-      newStats[status as keyof Stats] = count || 0;
-    }
-    setStats(newStats);
+    // Active
+    const { count: activeCount } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "active");
+
+    // Expiring in 7 days
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+    const { count: expiringCount } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "active")
+      .lte("expiry_date", sevenDaysFromNow.toISOString())
+      .gt("expiry_date", new Date().toISOString());
+
+    // Total
+    const { count: totalCount } = await supabase
+      .from("subscribers")
+      .select("*", { count: "exact", head: true });
+
+    setStats({
+      active: activeCount || 0,
+      needsAction: pendingCount || 0,
+      expiringSoon: expiringCount || 0,
+      total: totalCount || 0,
+    });
   };
 
   const fetchSubscribers = useCallback(async () => {
@@ -168,14 +166,12 @@ export default function Subscribers() {
         `, { count: "exact" });
 
       // Apply tab-based filter
-      if (activeTab === "active") {
+      if (activeTab === "needs-action") {
+        query = query.in("status", ["pending_approval", "awaiting_proof"]);
+      } else if (activeTab === "active") {
         query = query.eq("status", "active");
-      } else {
-        // Apply manual status filter only for "all" tab
-        if (statusFilter !== "all") {
-          query = query.eq("status", statusFilter as any);
-        }
       }
+      // "all" tab shows everything
       
       if (projectFilter !== "all") {
         query = query.eq("project_id", projectFilter);
@@ -203,7 +199,7 @@ export default function Subscribers() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, statusFilter, projectFilter, searchQuery, page, pageSize, activeTab]);
+  }, [user, projectFilter, searchQuery, page, pageSize, activeTab]);
 
   useEffect(() => {
     fetchProjects();
@@ -217,7 +213,7 @@ export default function Subscribers() {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, projectFilter, searchQuery, activeTab]);
+  }, [projectFilter, searchQuery, activeTab]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -237,6 +233,143 @@ export default function Subscribers() {
     setSelectedIds(newSelected);
   };
 
+  // Quick inline approve - the MAIN action for pending subscribers
+  const handleApprove = async (subscriber: Subscriber) => {
+    if (!["pending_approval", "awaiting_proof"].includes(subscriber.status)) return;
+
+    setProcessingIds(prev => new Set(prev).add(subscriber.id));
+    
+    try {
+      const plan = subscriber.plans;
+      const startDate = new Date();
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + (plan?.duration_days || 30));
+
+      const { error } = await supabase
+        .from("subscribers")
+        .update({
+          status: "active",
+          start_date: startDate.toISOString(),
+          expiry_date: expiryDate.toISOString(),
+          expiry_reminder_sent: false,
+          final_reminder_sent: false,
+        })
+        .eq("id", subscriber.id)
+        .in("status", ["pending_approval", "awaiting_proof"]);
+
+      if (error) throw error;
+
+      // Notify subscriber
+      await supabase.functions.invoke("notify-subscriber", {
+        body: {
+          subscriber_id: subscriber.id,
+          action: "approved",
+          expiry_date: expiryDate.toISOString(),
+        },
+      });
+
+      toast.success("Approved!", { description: `${subscriber.first_name || subscriber.username} is now active` });
+      fetchSubscribers();
+      fetchStats();
+    } catch (error: any) {
+      toast.error("Failed to approve", { description: error.message });
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(subscriber.id);
+        return next;
+      });
+    }
+  };
+
+  // Quick inline reject
+  const handleReject = async (subscriber: Subscriber) => {
+    if (!["pending_approval", "awaiting_proof"].includes(subscriber.status)) return;
+
+    setProcessingIds(prev => new Set(prev).add(subscriber.id));
+    
+    try {
+      const { error } = await supabase
+        .from("subscribers")
+        .update({ status: "rejected" })
+        .eq("id", subscriber.id)
+        .in("status", ["pending_approval", "awaiting_proof"]);
+
+      if (error) throw error;
+
+      await supabase.functions.invoke("notify-subscriber", {
+        body: {
+          subscriber_id: subscriber.id,
+          action: "rejected",
+        },
+      });
+
+      toast.success("Rejected", { description: "Subscriber has been notified" });
+      fetchSubscribers();
+      fetchStats();
+    } catch (error: any) {
+      toast.error("Failed to reject", { description: error.message });
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(subscriber.id);
+        return next;
+      });
+    }
+  };
+
+  // Quick extend for active subscribers
+  const handleExtend = async (subscriber: Subscriber, days: number = 30) => {
+    if (subscriber.status !== "active") return;
+
+    setProcessingIds(prev => new Set(prev).add(subscriber.id));
+    
+    try {
+      let baseDate: Date;
+      if (subscriber.expiry_date) {
+        const currentExpiry = new Date(subscriber.expiry_date);
+        baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
+      } else {
+        baseDate = new Date();
+      }
+      
+      const newExpiry = new Date(baseDate);
+      newExpiry.setDate(newExpiry.getDate() + days);
+
+      const { error } = await supabase
+        .from("subscribers")
+        .update({
+          expiry_date: newExpiry.toISOString(),
+          expiry_reminder_sent: false,
+          final_reminder_sent: false,
+        })
+        .eq("id", subscriber.id)
+        .eq("status", "active");
+
+      if (error) throw error;
+
+      await supabase.functions.invoke("notify-subscriber", {
+        body: {
+          subscriber_id: subscriber.id,
+          action: "extended",
+          expiry_date: newExpiry.toISOString(),
+        },
+      });
+
+      toast.success(`Extended by ${days} days`, { description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}` });
+      fetchSubscribers();
+    } catch (error: any) {
+      toast.error("Failed to extend", { description: error.message });
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(subscriber.id);
+        return next;
+      });
+    }
+  };
+
+  // Bulk approve
   const handleBulkApprove = async () => {
     if (selectedIds.size === 0) return;
 
@@ -264,12 +397,10 @@ export default function Subscribers() {
             expiry_reminder_sent: false,
             final_reminder_sent: false,
           })
-          .eq("id", sub.id)
-          .in("status", ["pending_approval", "awaiting_proof"]);
+          .eq("id", sub.id);
 
         if (!error) {
           successCount++;
-          // Send notification for each approved subscriber
           await supabase.functions.invoke("notify-subscriber", {
             body: {
               subscriber_id: sub.id,
@@ -280,7 +411,7 @@ export default function Subscribers() {
         }
       }
 
-      toast.success(`Approved ${successCount} subscriber(s) with their plan durations`);
+      toast.success(`Approved ${successCount} subscriber(s)`);
       setSelectedIds(new Set());
       fetchSubscribers();
       fetchStats();
@@ -291,89 +422,12 @@ export default function Subscribers() {
     }
   };
 
-  const handleBulkReject = async () => {
-    if (selectedIds.size === 0) return;
-
-    setIsProcessingBulk(true);
-    try {
-      const ids = Array.from(selectedIds);
-
-      const { error } = await supabase
-        .from("subscribers")
-        .update({ status: "rejected" })
-        .in("id", ids)
-        .in("status", ["pending_approval", "awaiting_proof"]);
-
-      if (error) throw error;
-
-      toast.success(`Rejected ${ids.length} subscriber(s)`);
-      setSelectedIds(new Set());
-      fetchSubscribers();
-      fetchStats();
-    } catch (error: any) {
-      toast.error("Failed to reject", { description: error.message });
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
-
-  const handleBulkExtend = async () => {
-    if (selectedIds.size === 0) return;
-
-    setIsProcessingBulk(true);
-    try {
-      const ids = Array.from(selectedIds);
-      const activeSubscribers = subscribers.filter(s => ids.includes(s.id) && s.status === "active");
-      
-      for (const sub of activeSubscribers) {
-        const days = 30; // Default 30 days for bulk extend
-        let baseDate: Date;
-        if (sub.expiry_date) {
-          const currentExpiry = new Date(sub.expiry_date);
-          baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
-        } else {
-          baseDate = new Date();
-        }
-        
-        const newExpiry = new Date(baseDate);
-        newExpiry.setDate(newExpiry.getDate() + days);
-
-        await supabase
-          .from("subscribers")
-          .update({
-            expiry_date: newExpiry.toISOString(),
-            expiry_reminder_sent: false,
-            final_reminder_sent: false,
-          })
-          .eq("id", sub.id)
-          .eq("status", "active");
-
-        // Notify subscriber
-        await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: sub.id,
-            action: "extended",
-            expiry_date: newExpiry.toISOString(),
-          },
-        });
-      }
-
-      toast.success(`Extended ${activeSubscribers.length} subscriber(s) by 30 days`);
-      setSelectedIds(new Set());
-      fetchSubscribers();
-    } catch (error: any) {
-      toast.error("Failed to extend", { description: error.message });
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
-
   const handleExportCSV = () => {
     const dataToExport = selectedIds.size > 0
       ? subscribers.filter((s) => selectedIds.has(s.id))
       : subscribers;
 
-    const headers = ["Telegram ID", "Username", "First Name", "Project", "Plan", "Status", "Expiry Date", "Payment Method", "In Channel"];
+    const headers = ["Telegram ID", "Username", "Name", "Project", "Plan", "Status", "Expiry"];
     const rows = dataToExport.map((s) => [
       s.telegram_user_id,
       s.username || "",
@@ -382,8 +436,6 @@ export default function Subscribers() {
       s.plans?.plan_name || "",
       s.status,
       s.expiry_date ? format(new Date(s.expiry_date), "yyyy-MM-dd") : "",
-      s.payment_method || "",
-      s.channel_joined ? "Yes" : s.channel_joined === false ? "No" : "Unknown",
     ]);
 
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -403,225 +455,18 @@ export default function Subscribers() {
     setDetailsOpen(true);
   };
 
-  const handleQuickApprove = async (subscriber: Subscriber) => {
-    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
-    if (!allowedStatuses.includes(subscriber.status)) {
-      toast.error("Cannot approve subscriber", { 
-        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
-      });
-      return;
-    }
+  const getTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
-    try {
-      const plan = subscriber.plans;
-      const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + (plan?.duration_days || 30));
-
-      const { error, count } = await supabase
-        .from("subscribers")
-        .update({
-          status: "active",
-          start_date: startDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          expiry_reminder_sent: false,
-          final_reminder_sent: false,
-        })
-        .eq("id", subscriber.id)
-        .in("status", allowedStatuses);
-
-      if (error) throw error;
-      if (count === 0) {
-        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
-        fetchSubscribers();
-        return;
-      }
-
-      try {
-        const { data: notifyData, error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: subscriber.id,
-            action: "approved",
-            expiry_date: expiryDate.toISOString(),
-          },
-        });
-
-        if (notifyError) {
-          console.error("Notification error:", notifyError);
-          toast.warning("Approved but notification failed", { 
-            description: "Subscriber approved but could not send Telegram notification." 
-          });
-        } else {
-          console.log("Notification sent:", notifyData);
-          toast.success("Subscriber approved and notified!");
-        }
-      } catch (notifyErr: any) {
-        console.error("Notification exception:", notifyErr);
-        toast.warning("Approved but notification failed", { 
-          description: notifyErr.message 
-        });
-      }
-
-      fetchSubscribers();
-      fetchStats();
-    } catch (error: any) {
-      toast.error("Failed to approve", { description: error.message });
-    }
-  };
-
-  const handleQuickReject = async (subscriber: Subscriber) => {
-    const allowedStatuses: Subscriber["status"][] = ["pending_approval", "awaiting_proof"];
-    if (!allowedStatuses.includes(subscriber.status)) {
-      toast.error("Cannot reject subscriber", { 
-        description: `Subscriber must be in 'Pending Approval' or 'Awaiting Proof' status. Current status: ${subscriber.status}` 
-      });
-      return;
-    }
-
-    try {
-      const { error, count } = await supabase
-        .from("subscribers")
-        .update({ status: "rejected" })
-        .eq("id", subscriber.id)
-        .in("status", allowedStatuses);
-
-      if (error) throw error;
-      if (count === 0) {
-        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
-        fetchSubscribers();
-        return;
-      }
-
-      try {
-        const { error: notifyError } = await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: subscriber.id,
-            action: "rejected",
-          },
-        });
-
-        if (notifyError) {
-          console.error("Notification error:", notifyError);
-          toast.warning("Rejected but notification failed", { 
-            description: "Subscriber rejected but could not send Telegram notification." 
-          });
-        } else {
-          toast.success("Subscriber rejected and notified");
-        }
-      } catch (notifyErr: any) {
-        console.error("Notification exception:", notifyErr);
-        toast.warning("Rejected but notification failed", { 
-          description: notifyErr.message 
-        });
-      }
-
-      fetchSubscribers();
-      fetchStats();
-    } catch (error: any) {
-      toast.error("Failed to reject", { description: error.message });
-    }
-  };
-
-  const handleQuickExtend = async (subscriber: Subscriber) => {
-    if (subscriber.status !== "active") {
-      toast.error("Cannot extend subscription", { 
-        description: `Subscriber must be 'Active' to extend. Current status: ${subscriber.status}` 
-      });
-      return;
-    }
-
-    const days = parseInt(quickExtendDays[subscriber.id] || "30");
-    if (isNaN(days) || days <= 0) {
-      toast.error("Please enter a valid number of days");
-      return;
-    }
-
-    try {
-      let baseDate: Date;
-      if (subscriber.expiry_date) {
-        const currentExpiry = new Date(subscriber.expiry_date);
-        baseDate = currentExpiry > new Date() ? currentExpiry : new Date();
-      } else {
-        baseDate = new Date();
-      }
-      
-      const newExpiry = new Date(baseDate);
-      newExpiry.setDate(newExpiry.getDate() + days);
-
-      const { error, count } = await supabase
-        .from("subscribers")
-        .update({
-          expiry_date: newExpiry.toISOString(),
-          expiry_reminder_sent: false,
-          final_reminder_sent: false,
-        })
-        .eq("id", subscriber.id)
-        .eq("status", "active");
-
-      if (error) throw error;
-      if (count === 0) {
-        toast.error("Subscriber status changed", { description: "Please refresh and try again." });
-        fetchSubscribers();
-        return;
-      }
-
-      // Notify subscriber about the extension
-      try {
-        await supabase.functions.invoke("notify-subscriber", {
-          body: {
-            subscriber_id: subscriber.id,
-            action: "extended",
-            expiry_date: newExpiry.toISOString(),
-          },
-        });
-        toast.success(`Extended by ${days} days`, {
-          description: `New expiry: ${format(newExpiry, "MMM d, yyyy")}`,
-        });
-      } catch (notifyErr: any) {
-        toast.warning("Extended but notification failed");
-      }
-
-      fetchSubscribers();
-    } catch (error: any) {
-      toast.error("Failed to extend", { description: error.message });
-    }
-  };
-
-  const handleCheckMembership = async (subscriber: Subscriber) => {
-    setIsCheckingMembership(prev => new Set(prev).add(subscriber.id));
-    
-    try {
-      const { data, error } = await supabase.functions.invoke("check-channel-membership", {
-        body: {
-          subscriber_id: subscriber.id,
-          update_database: true,
-        },
-      });
-
-      if (error) throw error;
-
-      const result = data?.results?.[0];
-      if (result) {
-        if (result.is_member) {
-          toast.success("User is in the channel", {
-            description: `Status: ${result.status}`,
-          });
-        } else {
-          toast.warning("User is NOT in the channel", {
-            description: `Status: ${result.status}`,
-          });
-        }
-        fetchSubscribers();
-      }
-    } catch (error: any) {
-      toast.error("Failed to check membership", { description: error.message });
-    } finally {
-      setIsCheckingMembership(prev => {
-        const next = new Set(prev);
-        next.delete(subscriber.id);
-        return next;
-      });
-    }
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
   };
 
   const getExpiryInfo = (expiryDate: string | null) => {
@@ -632,397 +477,298 @@ export default function Subscribers() {
     const daysLeft = differenceInDays(expiry, now);
     
     return {
-      text: format(expiry, "MMM d, yyyy"),
+      text: format(expiry, "MMM d"),
       daysLeft,
       isUrgent: daysLeft <= 7 && daysLeft >= 0,
       isExpired: daysLeft < 0,
     };
   };
 
-  const getChannelStatusBadge = (subscriber: Subscriber) => {
-    const status = subscriber.channel_membership_status;
-    const joined = subscriber.channel_joined;
-    
-    if (joined === true || status === "member" || status === "administrator" || status === "creator") {
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge variant="success" className="gap-1">
-                <CheckCircle className="h-3 w-3" />
-                Yes
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Status: {status || "member"}</p>
-              {subscriber.last_membership_check && (
-                <p className="text-xs text-muted-foreground">
-                  Checked: {format(new Date(subscriber.last_membership_check), "MMM d, HH:mm")}
-                </p>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
-    
-    if (joined === false || status === "left" || status === "kicked") {
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge variant="destructive" className="gap-1">
-                <XCircle className="h-3 w-3" />
-                No
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Status: {status || "not in channel"}</p>
-              {subscriber.last_membership_check && (
-                <p className="text-xs text-muted-foreground">
-                  Checked: {format(new Date(subscriber.last_membership_check), "MMM d, HH:mm")}
-                </p>
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
-    }
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const allSelected = subscribers.length > 0 && selectedIds.size === subscribers.length;
+
+  // Render the Needs Action card for a subscriber (prominent approve/reject)
+  const renderNeedsActionRow = (subscriber: Subscriber) => {
+    const hasProof = !!subscriber.payment_proof_url;
+    const isProcessing = processingIds.has(subscriber.id);
     
     return (
-      <Badge variant="muted" className="gap-1">
-        <AlertCircle className="h-3 w-3" />
-        Unknown
-      </Badge>
+      <div
+        key={subscriber.id}
+        className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Checkbox
+            checked={selectedIds.has(subscriber.id)}
+            onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
+            className="shrink-0"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-sm text-foreground truncate">
+                {subscriber.first_name || subscriber.username || "Unknown"}
+              </span>
+              {subscriber.username && (
+                <span className="text-xs text-muted-foreground">@{subscriber.username}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-muted-foreground">{subscriber.projects?.project_name}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-xs text-muted-foreground">{subscriber.plans?.plan_name || "No plan"}</span>
+              {subscriber.plans?.price && (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-xs font-medium text-foreground">${subscriber.plans.price}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Time ago */}
+          <span className="text-xs text-muted-foreground hidden sm:block">
+            {subscriber.created_at && getTimeAgo(subscriber.created_at)}
+          </span>
+          
+          {/* Payment proof indicator */}
+          {hasProof && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 gap-1 text-xs"
+              onClick={() => handleViewDetails(subscriber)}
+            >
+              <ImageIcon className="h-3 w-3" />
+              <span className="hidden sm:inline">Proof</span>
+            </Button>
+          )}
+          
+          {/* PROMINENT Approve/Reject buttons */}
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 px-3 gap-1.5 bg-success hover:bg-success/90 text-white"
+            onClick={() => handleApprove(subscriber)}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <CheckCircle className="h-3 w-3" />
+            )}
+            Approve
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10"
+            onClick={() => handleReject(subscriber)}
+            disabled={isProcessing}
+          >
+            <XCircle className="h-3 w-3" />
+            Reject
+          </Button>
+        </div>
+      </div>
     );
   };
 
-  const totalPages = Math.ceil(totalCount / pageSize);
-  const allSelected = subscribers.length > 0 && selectedIds.size === subscribers.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < subscribers.length;
-
-  const renderSubscribersTable = (showExtendColumn: boolean = false) => (
-    <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : subscribers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-          <Users className="h-8 w-8 mb-1.5 opacity-50" />
-          <p className="font-semibold text-xs">No subscribers found</p>
-          <p className="text-[10px]">Try adjusting your filters</p>
-        </div>
-      ) : (
-        <>
-          <div className="overflow-x-auto custom-scrollbar">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50 border-b border-border hover:bg-muted/50">
-                  <TableHead className="w-8 px-3 py-2">
-                    <Checkbox
-                      checked={allSelected}
-                      onCheckedChange={handleSelectAll}
-                      aria-label="Select all"
-                      className="rounded scale-75"
-                    />
-                  </TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Name</TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Project</TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Plan</TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Status</TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Channel</TableHead>
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Expiry</TableHead>
-                  {showExtendColumn && (
-                    <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Extend</TableHead>
-                  )}
-                  <TableHead className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="divide-y divide-border">
-                {subscribers.map((subscriber) => {
-                  const status = statusConfig[subscriber.status] || { label: subscriber.status, variant: "muted" };
-                  const expiryInfo = getExpiryInfo(subscriber.expiry_date);
-                  
-                  return (
-                    <TableRow
-                      key={subscriber.id}
-                      className={`hover:bg-muted/50 transition-colors ${
-                        selectedIds.has(subscriber.id) ? "bg-muted/30" : ""
-                      }`}
-                    >
-                      <TableCell className="px-3 py-2">
-                        <Checkbox
-                          checked={selectedIds.has(subscriber.id)}
-                          onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
-                          aria-label={`Select ${subscriber.username || subscriber.first_name}`}
-                          className="rounded scale-75"
-                        />
-                      </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <div
-                          className="flex items-center gap-2 cursor-pointer"
-                          onClick={() => handleViewDetails(subscriber)}
-                        >
-                          <img 
-                            src={`https://picsum.photos/seed/${subscriber.telegram_user_id}/24/24`} 
-                            className="w-6 h-6 rounded-full border border-border" 
-                            alt={subscriber.first_name || subscriber.username || "User"} 
-                          />
-                          <div>
-                            <span className="font-semibold text-xs text-foreground">
-                              {subscriber.first_name || subscriber.username || "Unknown"}
-                            </span>
-                            {subscriber.username && (
-                              <p className="text-[10px] text-muted-foreground">@{subscriber.username}</p>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-3 py-2 text-xs text-muted-foreground">
-                        {subscriber.projects?.project_name || "—"}
-                      </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <span className="px-1.5 py-0.5 bg-muted text-muted-foreground rounded text-[10px] font-semibold">
-                          {subscriber.plans?.plan_name || "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                          subscriber.status === 'active' 
-                            ? 'bg-success/10 text-success border border-success/20' 
-                            : subscriber.status === 'expired' || subscriber.status === 'rejected'
-                            ? 'bg-muted text-muted-foreground border border-border'
-                            : 'bg-warning/10 text-warning border border-warning/20'
-                        }`}>
-                          <div className={`w-1 h-1 rounded-full ${
-                            subscriber.status === 'active' ? 'bg-success' : 
-                            subscriber.status === 'expired' || subscriber.status === 'rejected' ? 'bg-muted-foreground' : 'bg-warning'
-                          }`} />
-                          {status.label}
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          {getChannelStatusBadge(subscriber)}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCheckMembership(subscriber)}
-                            disabled={isCheckingMembership.has(subscriber.id)}
-                            className="h-5 w-5 p-0"
-                          >
-                            {isCheckingMembership.has(subscriber.id) ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-2.5 w-2.5" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-3 py-2">
-                        <div className="text-xs text-muted-foreground">
-                          {expiryInfo.text}
-                          {expiryInfo.daysLeft !== null && expiryInfo.daysLeft >= 0 && expiryInfo.daysLeft <= 7 && (
-                            <span className={`block text-[10px] ${expiryInfo.isUrgent ? "text-warning" : ""}`}>
-                              ({expiryInfo.daysLeft}d left)
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      {showExtendColumn && subscriber.status === "active" && (
-                        <TableCell className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <Input
-                              type="number"
-                              value={quickExtendDays[subscriber.id] || "30"}
-                              onChange={(e) => setQuickExtendDays(prev => ({ ...prev, [subscriber.id]: e.target.value }))}
-                              className="w-12 h-6 text-[10px]"
-                              placeholder="Days"
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 text-[10px] gap-1"
-                              onClick={() => handleQuickExtend(subscriber)}
-                            >
-                              <CalendarPlus className="h-2.5 w-2.5" />
-                              Extend
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                      {showExtendColumn && subscriber.status !== "active" && (
-                        <TableCell className="px-3 py-2">
-                          <span className="text-[10px] text-muted-foreground">N/A</span>
-                        </TableCell>
-                      )}
-                      <TableCell className="px-3 py-2 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon-sm" className="h-5 w-5">
-                              <MoreHorizontal className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewDetails(subscriber)} className="text-xs">
-                              <Eye className="h-3 w-3 mr-1.5" />
-                              View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCheckMembership(subscriber)} className="text-xs">
-                              <RefreshCw className="h-3 w-3 mr-1.5" />
-                              Check Channel Status
-                            </DropdownMenuItem>
-                            {(subscriber.status === "pending_approval" || subscriber.status === "awaiting_proof") && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-success text-xs"
-                                  onClick={() => handleQuickApprove(subscriber)}
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1.5" />
-                                  Approve
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-destructive text-xs"
-                                  onClick={() => handleQuickReject(subscriber)}
-                                >
-                                  <XCircle className="h-3 w-3 mr-1.5" />
-                                  Reject
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {subscriber.status === "active" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleViewDetails(subscriber)} className="text-xs">
-                                  <Clock className="h-3 w-3 mr-1.5" />
-                                  Extend Subscription
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+  // Render standard table row for All/Active tabs
+  const renderTableRow = (subscriber: Subscriber, showExtend: boolean = false) => {
+    const expiryInfo = getExpiryInfo(subscriber.expiry_date);
+    const isProcessing = processingIds.has(subscriber.id);
+    const isPending = ["pending_approval", "awaiting_proof"].includes(subscriber.status);
+    
+    return (
+      <TableRow key={subscriber.id} className="hover:bg-muted/30">
+        <TableCell className="w-8">
+          <Checkbox
+            checked={selectedIds.has(subscriber.id)}
+            onCheckedChange={(checked) => handleSelectOne(subscriber.id, !!checked)}
+          />
+        </TableCell>
+        <TableCell>
+          <div
+            className="cursor-pointer"
+            onClick={() => handleViewDetails(subscriber)}
+          >
+            <span className="font-medium text-sm">
+              {subscriber.first_name || subscriber.username || "Unknown"}
+            </span>
+            {subscriber.username && (
+              <p className="text-xs text-muted-foreground">@{subscriber.username}</p>
+            )}
           </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-t border-border">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span>Rows:</span>
-              <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
-                <SelectTrigger className="w-[60px] h-6 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAGE_SIZES.map((size) => (
-                    <SelectItem key={size} value={size.toString()} className="text-xs">
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">
-                {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
-              </span>
-              <div className="flex items-center gap-0.5">
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+          {subscriber.projects?.project_name || "—"}
+        </TableCell>
+        <TableCell className="hidden md:table-cell">
+          <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+            {subscriber.plans?.plan_name || "—"}
+          </span>
+        </TableCell>
+        <TableCell>
+          <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+            subscriber.status === 'active' 
+              ? 'bg-success/10 text-success' 
+              : isPending
+              ? 'bg-warning/10 text-warning'
+              : 'bg-muted text-muted-foreground'
+          }`}>
+            <div className={`w-1 h-1 rounded-full ${
+              subscriber.status === 'active' ? 'bg-success' : 
+              isPending ? 'bg-warning' : 'bg-muted-foreground'
+            }`} />
+            {subscriber.status === 'active' ? 'Active' : 
+             subscriber.status === 'pending_approval' ? 'Pending' :
+             subscriber.status === 'awaiting_proof' ? 'Awaiting' :
+             subscriber.status === 'expired' ? 'Expired' :
+             subscriber.status === 'rejected' ? 'Rejected' : subscriber.status}
+          </div>
+        </TableCell>
+        <TableCell className="hidden sm:table-cell">
+          <div className="text-xs text-muted-foreground">
+            {expiryInfo.text}
+            {expiryInfo.daysLeft !== null && expiryInfo.daysLeft >= 0 && expiryInfo.daysLeft <= 7 && (
+              <span className="text-warning ml-1">({expiryInfo.daysLeft}d)</span>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="flex items-center justify-end gap-1">
+            {/* Quick actions based on status */}
+            {isPending && (
+              <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0"
-                  disabled={page === 1}
-                  onClick={() => setPage(page - 1)}
+                  className="h-6 w-6 p-0 text-success hover:bg-success/10"
+                  onClick={() => handleApprove(subscriber)}
+                  disabled={isProcessing}
                 >
-                  <ChevronLeft className="h-3 w-3" />
+                  {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
+                  className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
+                  onClick={() => handleReject(subscriber)}
+                  disabled={isProcessing}
                 >
-                  <ChevronRight className="h-3 w-3" />
+                  <XCircle className="h-3 w-3" />
                 </Button>
-              </div>
-            </div>
+              </>
+            )}
+            {showExtend && subscriber.status === "active" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1"
+                onClick={() => handleExtend(subscriber)}
+                disabled={isProcessing}
+              >
+                {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarPlus className="h-3 w-3" />}
+                +30d
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <MoreHorizontal className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleViewDetails(subscriber)} className="text-xs">
+                  <Eye className="h-3 w-3 mr-1.5" />
+                  View Details
+                </DropdownMenuItem>
+                {subscriber.status === "active" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleExtend(subscriber, 7)} className="text-xs">
+                      <CalendarPlus className="h-3 w-3 mr-1.5" />
+                      Extend 7 days
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExtend(subscriber, 30)} className="text-xs">
+                      <CalendarPlus className="h-3 w-3 mr-1.5" />
+                      Extend 30 days
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </>
-      )}
-    </div>
-  );
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <div className="space-y-4 max-w-6xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Subscribers</h1>
-          <p className="text-gray-500 text-xs">Manage all your channel subscribers in one place.</p>
+          <h1 className="text-base font-semibold text-foreground">Subscribers</h1>
+          <p className="text-muted-foreground text-xs">Manage payments and subscriber access.</p>
         </div>
         <div className="flex gap-1.5">
           <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={handleExportCSV}>
             <Download className="h-3 w-3" />
-            Export {selectedIds.size > 0 && `(${selectedIds.size})`}
+            <span className="hidden sm:inline">Export</span>
           </Button>
           <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setAddDialogOpen(true)}>
             <Plus className="h-3 w-3" />
-            Add Subscriber
+            Add
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <Card className="cursor-pointer hover:border-success/50 transition-colors" onClick={() => { setActiveTab("active"); setStatusFilter("all"); }}>
-          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-md bg-success/20 flex items-center justify-center">
-              <UserCheck className="h-3.5 w-3.5 text-success" />
+      {/* Stats Cards - Simplified */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <Card 
+          className={`cursor-pointer transition-colors ${activeTab === 'needs-action' ? 'border-warning/50 bg-warning/5' : 'hover:border-warning/30'}`}
+          onClick={() => setActiveTab("needs-action")}
+        >
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-md bg-warning/20 flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-warning" />
             </div>
             <div>
-              <p className="text-lg font-bold text-foreground">{stats.active}</p>
+              <p className={`text-xl font-bold ${stats.needsAction > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
+                {stats.needsAction}
+              </p>
+              <p className="text-[10px] text-muted-foreground">Needs Action</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card 
+          className={`cursor-pointer transition-colors ${activeTab === 'active' ? 'border-success/50 bg-success/5' : 'hover:border-success/30'}`}
+          onClick={() => setActiveTab("active")}
+        >
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-md bg-success/20 flex items-center justify-center">
+              <UserCheck className="h-4 w-4 text-success" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-foreground">{stats.active}</p>
               <p className="text-[10px] text-muted-foreground">Active</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="cursor-pointer hover:border-warning/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("pending_approval"); }}>
-          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-md bg-warning/20 flex items-center justify-center">
-              <Clock className="h-3.5 w-3.5 text-warning" />
+        <Card 
+          className={`cursor-pointer transition-colors ${activeTab === 'all' ? 'border-primary/50 bg-primary/5' : 'hover:border-muted-foreground/30'}`}
+          onClick={() => setActiveTab("all")}
+        >
+          <CardContent className="p-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+              <Users className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-lg font-bold text-warning">{stats.pending_approval}</p>
-              <p className="text-[10px] text-muted-foreground">Pending Approval</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:border-secondary/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("awaiting_proof"); }}>
-          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-md bg-secondary/20 flex items-center justify-center">
-              <AlertCircle className="h-3.5 w-3.5 text-secondary" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-secondary">{stats.awaiting_proof}</p>
-              <p className="text-[10px] text-muted-foreground">Awaiting Proof</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer hover:border-muted-foreground/50 transition-colors" onClick={() => { setActiveTab("all"); setStatusFilter("expired"); }}>
-          <CardContent className="pt-3 pb-3 flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-md bg-muted/50 flex items-center justify-center">
-              <UserX className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-muted-foreground">{stats.expired}</p>
-              <p className="text-[10px] text-muted-foreground">Expired</p>
+              <p className="text-xl font-bold text-foreground">{stats.total}</p>
+              <p className="text-[10px] text-muted-foreground">Total</p>
             </div>
           </CardContent>
         </Card>
@@ -1030,62 +776,72 @@ export default function Subscribers() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-xs grid-cols-2">
-          <TabsTrigger value="all" className="gap-1.5 text-xs">
-            <Users className="h-3 w-3" />
-            All Subscribers
-          </TabsTrigger>
-          <TabsTrigger value="active" className="gap-1.5 text-xs">
-            <CalendarPlus className="h-3 w-3" />
-            Active / Extend
-            <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-              {stats.active}
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between gap-3">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsTrigger value="needs-action" className="gap-1.5 text-xs">
+              <AlertTriangle className="h-3 w-3" />
+              Needs Action
+              {stats.needsAction > 0 && (
+                <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">
+                  {stats.needsAction}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="active" className="gap-1.5 text-xs">
+              <UserCheck className="h-3 w-3" />
+              Active
+            </TabsTrigger>
+            <TabsTrigger value="all" className="gap-1.5 text-xs">
+              <Users className="h-3 w-3" />
+              All
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Bulk Actions Bar */}
+          {/* Filters */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-7 text-xs w-40"
+              />
+            </div>
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="w-[140px] h-7 text-xs">
+                <SelectValue placeholder="All Projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">All Projects</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id} className="text-xs">
+                    {project.project_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Bulk Actions */}
         {selectedIds.size > 0 && (
-          <Card className="bg-primary/10 border-primary/30 mt-3">
+          <Card className="bg-primary/5 border-primary/30 mt-3">
             <CardContent className="py-2 flex items-center justify-between">
               <span className="text-xs text-foreground">
-                {selectedIds.size} subscriber(s) selected
+                {selectedIds.size} selected
               </span>
               <div className="flex gap-1.5">
-                {activeTab === "all" && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 h-6 text-[10px] bg-success/20 border-success/30 text-success hover:bg-success/30"
-                      onClick={handleBulkApprove}
-                      disabled={isProcessingBulk}
-                    >
-                      {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 h-6 text-[10px] bg-destructive/20 border-destructive/30 text-destructive hover:bg-destructive/30"
-                      onClick={handleBulkReject}
-                      disabled={isProcessingBulk}
-                    >
-                      {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                      Reject
-                    </Button>
-                  </>
-                )}
-                {activeTab === "active" && (
+                {activeTab === "needs-action" && (
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
-                    className="gap-1.5 h-6 text-[10px] bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
-                    onClick={handleBulkExtend}
+                    className="gap-1.5 h-6 text-[10px] bg-success hover:bg-success/90"
+                    onClick={handleBulkApprove}
                     disabled={isProcessingBulk}
                   >
-                    {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <CalendarPlus className="h-3 w-3" />}
-                    Extend 30 Days
+                    {isProcessingBulk ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                    Approve All
                   </Button>
                 )}
                 <Button
@@ -1101,59 +857,191 @@ export default function Subscribers() {
           </Card>
         )}
 
-        {/* Filters */}
-        <Card className="mt-3">
-          <CardContent className="pt-3 pb-3">
-            <div className="flex flex-col md:flex-row gap-2.5">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                <Input
-                  placeholder="Search by username, name, or Telegram ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 h-7 text-xs"
-                />
+        {/* Needs Action Tab - Card-based layout with prominent buttons */}
+        <TabsContent value="needs-action" className="mt-3">
+          <Card>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-              {activeTab === "all" && (
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full md:w-[150px] h-7 text-xs">
-                    <Filter className="h-3 w-3 mr-1.5" />
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
-                    <SelectItem value="active" className="text-xs">Active</SelectItem>
-                    <SelectItem value="pending_approval" className="text-xs">Pending Approval</SelectItem>
-                    <SelectItem value="pending_payment" className="text-xs">Pending Payment</SelectItem>
-                    <SelectItem value="awaiting_proof" className="text-xs">Awaiting Proof</SelectItem>
-                    <SelectItem value="expired" className="text-xs">Expired</SelectItem>
-                    <SelectItem value="rejected" className="text-xs">Rejected</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-              <Select value={projectFilter} onValueChange={setProjectFilter}>
-                <SelectTrigger className="w-full md:w-[160px] h-7 text-xs">
-                  <SelectValue placeholder="Project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" className="text-xs">All Projects</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id} className="text-xs">
-                      {project.project_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <TabsContent value="all" className="mt-3">
-          {renderSubscribersTable(false)}
+            ) : subscribers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                <CheckCircle className="h-10 w-10 mb-2 text-success/50" />
+                <p className="font-medium text-sm">All caught up!</p>
+                <p className="text-xs">No pending approvals at the moment.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {subscribers.map(renderNeedsActionRow)}
+              </div>
+            )}
+          </Card>
         </TabsContent>
 
+        {/* Active Tab */}
         <TabsContent value="active" className="mt-3">
-          {renderSubscribersTable(true)}
+          <Card>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : subscribers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                <Users className="h-8 w-8 mb-1.5 opacity-50" />
+                <p className="text-xs">No active subscribers</p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="hidden sm:table-cell">Project</TableHead>
+                      <TableHead className="hidden md:table-cell">Plan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden sm:table-cell">Expiry</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {subscribers.map((s) => renderTableRow(s, true))}
+                  </TableBody>
+                </Table>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-3 py-2.5 border-t border-border">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Rows:</span>
+                    <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
+                      <SelectTrigger className="w-[60px] h-6 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZES.map((size) => (
+                          <SelectItem key={size} value={size.toString()} className="text-xs">
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        disabled={page === 1}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* All Tab */}
+        <TabsContent value="all" className="mt-3">
+          <Card>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : subscribers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                <Users className="h-8 w-8 mb-1.5 opacity-50" />
+                <p className="text-xs">No subscribers found</p>
+              </div>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="hidden sm:table-cell">Project</TableHead>
+                      <TableHead className="hidden md:table-cell">Plan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden sm:table-cell">Expiry</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {subscribers.map((s) => renderTableRow(s, false))}
+                  </TableBody>
+                </Table>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-3 py-2.5 border-t border-border">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>Rows:</span>
+                    <Select value={pageSize.toString()} onValueChange={(v) => setPageSize(parseInt(v))}>
+                      <SelectTrigger className="w-[60px] h-6 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAGE_SIZES.map((size) => (
+                          <SelectItem key={size} value={size.toString()} className="text-xs">
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      {(page - 1) * pageSize + 1}-{Math.min(page * pageSize, totalCount)} of {totalCount}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        disabled={page === 1}
+                        onClick={() => setPage(page - 1)}
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        disabled={page >= totalPages}
+                        onClick={() => setPage(page + 1)}
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 

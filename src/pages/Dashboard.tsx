@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   FolderOpen,
   Users,
@@ -8,25 +10,30 @@ import {
   Plus,
   Clock,
   Loader2,
+  AlertTriangle,
+  CheckCircle,
+  ArrowRight,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 
 interface DashboardStats {
   revenue: number;
   activeSubscribers: number;
   projectsUsed: number;
+  needsAction: number;
   expiringSoon: number;
 }
 
-interface RecentActivity {
+interface PendingSubscriber {
   id: string;
-  type: "subscription" | "payment" | "expired";
-  message: string;
-  time: string;
-  project: string;
+  first_name: string | null;
+  username: string | null;
+  project_name: string;
+  plan_name: string | null;
+  created_at: string;
 }
 
 export default function Dashboard() {
@@ -36,10 +43,12 @@ export default function Dashboard() {
     revenue: 0,
     activeSubscribers: 0,
     projectsUsed: 0,
+    needsAction: 0,
     expiringSoon: 0,
   });
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [pendingSubscribers, setPendingSubscribers] = useState<PendingSubscriber[]>([]);
   const [userName, setUserName] = useState("User");
+  const [hasProjects, setHasProjects] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -71,12 +80,13 @@ export default function Dashboard() {
 
       const projectIds = (projects || []).map((p) => p.id);
       const projectsUsed = projectIds.length;
+      setHasProjects(projectsUsed > 0);
 
       // Fetch subscribers for user's projects
       let activeSubscribers = 0;
       let expiringSoon = 0;
+      let needsAction = 0;
       let totalRevenue = 0;
-      const activities: RecentActivity[] = [];
 
       if (projectIds.length > 0) {
         // Count active subscribers
@@ -87,6 +97,42 @@ export default function Dashboard() {
           .eq("status", "active");
 
         activeSubscribers = activeCount || 0;
+
+        // Count pending (needs action)
+        const { count: pendingCount } = await supabase
+          .from("subscribers")
+          .select("*", { count: "exact", head: true })
+          .in("project_id", projectIds)
+          .in("status", ["pending_approval", "awaiting_proof"]);
+
+        needsAction = pendingCount || 0;
+
+        // Fetch pending subscribers for quick action
+        const { data: pendingSubs } = await supabase
+          .from("subscribers")
+          .select(`
+            id,
+            first_name,
+            username,
+            created_at,
+            projects!inner(project_name),
+            plans(plan_name)
+          `)
+          .in("project_id", projectIds)
+          .in("status", ["pending_approval", "awaiting_proof"])
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (pendingSubs) {
+          setPendingSubscribers(pendingSubs.map((s: any) => ({
+            id: s.id,
+            first_name: s.first_name,
+            username: s.username,
+            project_name: s.projects?.project_name || "Unknown",
+            plan_name: s.plans?.plan_name || null,
+            created_at: s.created_at,
+          })));
+        }
 
         // Count expiring in next 7 days
         const sevenDaysFromNow = addDays(new Date(), 7).toISOString();
@@ -111,56 +157,15 @@ export default function Dashboard() {
           (sum, s: any) => sum + (s.plans?.price || 0),
           0
         );
-
-        // Fetch recent activity
-        const { data: recentSubs } = await supabase
-          .from("subscribers")
-          .select("id, status, first_name, username, updated_at, projects(project_name)")
-          .in("project_id", projectIds)
-          .order("updated_at", { ascending: false })
-          .limit(5);
-
-        (recentSubs || []).forEach((sub: any) => {
-          const displayName = sub.username ? `@${sub.username}` : sub.first_name || "User";
-          const projectName = sub.projects?.project_name || "Unknown";
-          const timeAgo = getTimeAgo(sub.updated_at);
-
-          if (sub.status === "active") {
-            activities.push({
-              id: sub.id,
-              type: "subscription",
-              message: `New subscriber ${displayName}`,
-              time: timeAgo,
-              project: projectName,
-            });
-          } else if (sub.status === "expired") {
-            activities.push({
-              id: sub.id,
-              type: "expired",
-              message: `Subscription expired ${displayName}`,
-              time: timeAgo,
-              project: projectName,
-            });
-          } else if (sub.status === "pending_approval") {
-            activities.push({
-              id: sub.id,
-              type: "payment",
-              message: `Payment pending ${displayName}`,
-              time: timeAgo,
-              project: projectName,
-            });
-          }
-        });
       }
 
       setStats({
         revenue: totalRevenue,
         activeSubscribers,
         projectsUsed,
+        needsAction,
         expiringSoon,
       });
-
-      setRecentActivity(activities.slice(0, 4));
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
@@ -177,125 +182,194 @@ export default function Dashboard() {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  const statCards = [
-    {
-      title: "Revenue",
-      value: `$${stats.revenue.toLocaleString()}`,
-      icon: DollarSign,
-    },
-    {
-      title: "Active Projects",
-      value: stats.projectsUsed.toString(),
-      icon: FolderOpen,
-    },
-    {
-      title: "Active Subscribers",
-      value: stats.activeSubscribers.toString(),
-      icon: Users,
-    },
-    {
-      title: "Expiring Soon",
-      value: stats.expiringSoon.toString(),
-      icon: Clock,
-    },
-  ];
+  // Empty state for new users
+  if (!hasProjects) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+        <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+          <FolderOpen className="h-8 w-8 text-primary" />
+        </div>
+        <h1 className="text-xl font-semibold text-foreground mb-2">Welcome to SubscribeHub!</h1>
+        <p className="text-muted-foreground text-sm max-w-md mb-6">
+          Create your first project to start managing Telegram subscriptions. It only takes a minute.
+        </p>
+        <Link to="/projects">
+          <Button size="lg" className="gap-2">
+            <Plus className="h-4 w-4" />
+            Create Your First Project
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 sm:space-y-6 w-full">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-5xl">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-900">Welcome back, {userName}! 👋</h1>
-          <p className="text-gray-500 text-xs">Here's what's happening with your channels today.</p>
+          <h1 className="text-base font-semibold text-foreground">Welcome back, {userName}! 👋</h1>
+          <p className="text-muted-foreground text-xs">Here's what's happening with your channels today.</p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-7 text-xs px-2.5">
-            Export
+        <Link to="/projects">
+          <Button size="sm" className="h-7 text-xs px-2.5 gap-1.5">
+            <Plus className="h-3 w-3" />
+            New Project
           </Button>
-          <Link to="/projects">
-            <Button size="sm" className="h-7 text-xs px-2.5 gap-1.5">
-              <Plus className="h-3 w-3" />
-              New Project
-            </Button>
-          </Link>
-        </div>
+        </Link>
       </div>
+
+      {/* PRIORITY: Needs Action Banner */}
+      {stats.needsAction > 0 && (
+        <Card className="border-warning/50 bg-warning/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-warning/20 flex items-center justify-center">
+                  <AlertTriangle className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {stats.needsAction} payment{stats.needsAction > 1 ? 's' : ''} waiting for approval
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Review and approve to activate subscriptions
+                  </p>
+                </div>
+              </div>
+              <Link to="/subscribers">
+                <Button className="gap-1.5 bg-warning hover:bg-warning/90 text-warning-foreground">
+                  Review Now
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+            
+            {/* Quick list of pending */}
+            {pendingSubscribers.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-warning/20">
+                <div className="space-y-2">
+                  {pendingSubscribers.slice(0, 3).map((sub) => (
+                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                          {(sub.first_name || sub.username || "?")[0].toUpperCase()}
+                        </div>
+                        <span className="text-foreground">
+                          {sub.first_name || sub.username || "Unknown"}
+                        </span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-muted-foreground text-xs">{sub.project_name}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{getTimeAgo(sub.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        {statCards.map((stat) => (
-          <div
-            key={stat.title}
-            className="p-3 bg-white border border-gray-200 rounded-lg"
-          >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <Card>
+          <CardContent className="p-3">
             <div className="flex items-center gap-2.5">
-              <div className="h-7 w-7 rounded-md bg-gray-100 flex items-center justify-center">
-                <stat.icon className="h-3.5 w-3.5 text-gray-600" />
+              <div className="h-8 w-8 rounded-md bg-success/10 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-success" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">{stat.title}</p>
-                <p className="text-lg font-semibold text-gray-900">{stat.value}</p>
+                <p className="text-xs text-muted-foreground">Revenue</p>
+                <p className="text-lg font-semibold text-foreground">${stats.revenue.toLocaleString()}</p>
               </div>
             </div>
-          </div>
-        ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+                <FolderOpen className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Projects</p>
+                <p className="text-lg font-semibold text-foreground">{stats.projectsUsed}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-md bg-success/10 flex items-center justify-center">
+                <Users className="h-4 w-4 text-success" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Active Subs</p>
+                <p className="text-lg font-semibold text-foreground">{stats.activeSubscribers}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={stats.expiringSoon > 0 ? "border-warning/30" : ""}>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2.5">
+              <div className={`h-8 w-8 rounded-md flex items-center justify-center ${stats.expiringSoon > 0 ? 'bg-warning/10' : 'bg-muted'}`}>
+                <Clock className={`h-4 w-4 ${stats.expiringSoon > 0 ? 'text-warning' : 'text-muted-foreground'}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Expiring Soon</p>
+                <p className={`text-lg font-semibold ${stats.expiringSoon > 0 ? 'text-warning' : 'text-foreground'}`}>
+                  {stats.expiringSoon}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-900">Recent Activity</h2>
-          <Link to="/subscribers">
-            <Button variant="ghost" size="sm" className="h-6 text-xs text-gray-500 hover:text-gray-900">
-              View All
-            </Button>
-          </Link>
-        </div>
-        <div className="p-3">
-          {recentActivity.length > 0 ? (
-            <div className="space-y-1.5">
-              {recentActivity.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      activity.type === "subscription" ? "bg-green-500" :
-                      activity.type === "payment" ? "bg-amber-500" :
-                      "bg-gray-400"
-                    )} />
-                    <div>
-                      <p className="text-xs text-gray-900">{activity.message}</p>
-                      <p className="text-[10px] text-gray-500">{activity.project}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-gray-500">{activity.time}</span>
-                </div>
-              ))}
+      {/* All Caught Up State */}
+      {stats.needsAction === 0 && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle className="h-6 w-6 text-success" />
             </div>
-          ) : (
-            <div className="text-center py-5 text-gray-500">
-              <Users className="h-7 w-7 mx-auto mb-1.5 opacity-40" />
-              <p className="text-xs">No recent activity yet</p>
-              <p className="text-[10px]">Create a project to get started!</p>
+            <h3 className="font-semibold text-foreground mb-1">You're all caught up!</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              No pending payments to review. Your bot is handling subscriptions automatically.
+            </p>
+            <div className="flex justify-center gap-2">
+              <Link to="/subscribers">
+                <Button variant="outline" size="sm">View Subscribers</Button>
+              </Link>
+              <Link to="/projects">
+                <Button variant="outline" size="sm">Manage Projects</Button>
+              </Link>
             </div>
-          )}
-        </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick Stats Summary */}
+      <div className="text-center text-xs text-muted-foreground">
+        <p>
+          Today: {format(new Date(), "EEEE, MMMM d, yyyy")}
+        </p>
       </div>
     </div>
   );
