@@ -131,6 +131,43 @@ export default function Projects() {
     fetchProjects();
   }, [user]);
 
+  // Real-time subscription for bot health updates
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('projects-health')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'projects',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          // Update the project in local state with health data
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === payload.new.id
+                ? {
+                    ...p,
+                    last_webhook_at: payload.new.last_webhook_at as string | null,
+                    webhook_status: payload.new.webhook_status as string | null,
+                    webhook_error: payload.new.webhook_error as string | null,
+                  }
+                : p
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const handleEditProject = (project: Project) => {
     setSelectedProject(project);
     setEditDialogOpen(true);
