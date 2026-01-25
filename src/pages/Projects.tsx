@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { CreateProjectDialog } from "@/components/projects/CreateProjectDialog";
 import { EditProjectDialog } from "@/components/projects/EditProjectDialog";
 import { PlansDialog } from "@/components/projects/PlansDialog";
+import { BotHealthBadge } from "@/components/projects/BotHealthBadge";
 
 interface Project {
   id: string;
@@ -37,6 +38,9 @@ interface Project {
   stripe_config: any;
   manual_payment_config: any;
   created_at: string | null;
+  last_webhook_at: string | null;
+  webhook_status: string | null;
+  webhook_error: string | null;
 }
 
 interface ProjectStats {
@@ -194,7 +198,14 @@ export default function Projects() {
                     </p>
                   </div>
                 </div>
-                {getStatusBadge(project.status)}
+                <div className="flex items-center gap-1.5">
+                  {getStatusBadge(project.status)}
+                  <BotHealthBadge
+                    lastWebhookAt={project.last_webhook_at}
+                    webhookStatus={project.webhook_status}
+                    webhookError={project.webhook_error}
+                  />
+                </div>
               </div>
 
               {/* Stats */}
