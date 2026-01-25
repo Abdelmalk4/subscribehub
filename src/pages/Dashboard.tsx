@@ -14,7 +14,7 @@ import {
   CheckCircle,
   ArrowRight,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { addDays, format } from "date-fns";
@@ -38,6 +38,7 @@ interface PendingSubscriber {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     revenue: 0,
@@ -49,6 +50,13 @@ export default function Dashboard() {
   const [pendingSubscribers, setPendingSubscribers] = useState<PendingSubscriber[]>([]);
   const [userName, setUserName] = useState("User");
   const [hasProjects, setHasProjects] = useState(true);
+
+  // Redirect first-time users to onboarding
+  useEffect(() => {
+    if (!isLoading && !hasProjects && user) {
+      navigate("/onboarding", { replace: true });
+    }
+  }, [isLoading, hasProjects, user, navigate]);
 
   useEffect(() => {
     if (user) {
@@ -195,23 +203,12 @@ export default function Dashboard() {
     );
   }
 
-  // Empty state for new users
+  // Empty state - shows briefly while redirecting to onboarding
   if (!hasProjects) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-        <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-          <FolderOpen className="h-8 w-8 text-primary" />
-        </div>
-        <h1 className="text-xl font-semibold text-foreground mb-2">Welcome to SubscribeHub!</h1>
-        <p className="text-muted-foreground text-sm max-w-md mb-6">
-          Create your first project to start managing Telegram subscriptions. It only takes a minute.
-        </p>
-        <Link to="/projects">
-          <Button size="lg" className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Your First Project
-          </Button>
-        </Link>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground mt-2">Redirecting to setup...</p>
       </div>
     );
   }
